@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hodômetro</title>
+<meta name="description" content="Grava seus pedais pelo GPS: distância, velocidade, ritmo e pausas. Funciona offline.">
+<meta name="theme-color" content="#eceff2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111418" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icone-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Hodômetro">
+<link rel="preload" href="fonts/share-tech-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="css/app.css">
+<script type="module" src="js/app.js"></script>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- PEDALAR -->
+  <main class="tela" id="telaPedalar">
+
+    <div id="pronto" class="tela">
+      <header class="topo"><h1>Hodômetro</h1><span class="lado" id="hojeTxt"></span></header>
+
+      <section class="cartao gps" id="gpsCartao" aria-live="polite">
+        <div class="barras" id="gpsBarras" data-n="0" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        <div><b id="gpsTitulo">GPS desligado</b><span id="gpsSub">Ative para ver o sinal antes de sair.</span></div>
+        <button type="button" class="btn2" id="btnGps">Ativar GPS</button>
+      </section>
+
+      <div class="bloco">
+        <button type="button" class="primary" id="btnComecar">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5z" fill="currentColor"/></svg>
+          Começar pedal
+        </button>
+        <p class="hint" id="dicaComecar"></p>
+      </div>
+
+      <section class="cartao" id="instalar" hidden>
+        <p><b>Instale no celular</b></p>
+        <p class="hint" id="instalarTxt"></p>
+        <div class="linha-btn">
+          <button type="button" class="btn2 cheio" id="btnInstalar" hidden>Instalar app</button>
+          <button type="button" class="btn2" id="btnFecharInstalar">Agora não</button>
+        </div>
+      </section>
+
+      <section class="bloco">
+        <div class="bloco-h"><h2>Esta semana</h2><span class="tot" id="semTot">0,0 km</span></div>
+        <div class="meta" id="meta" hidden></div>
+        <div class="sem" id="sem"></div>
+        <p class="sem-cap" id="semCap" aria-live="polite"></p>
+      </section>
+
+      <section class="bloco" id="ultimoBloco" hidden>
+        <div class="bloco-h"><h2>Último pedal</h2></div>
+        <div class="lista" id="ultimo"></div>
+      </section>
+    </div>
+
+    <div id="gravando" class="tela" hidden>
+      <div class="status" id="status" aria-live="polite">
+        <span class="ponto" aria-hidden="true"></span><b id="statusTxt">Procurando GPS</b><span class="extra" id="statusGps"></span>
+      </div>
+
+      <section class="device" aria-label="Computador de bordo">
+        <div class="lcd">
+          <div class="lcd-top"><span>Velocidade</span><span>km/h</span></div>
+          <div class="lcd-main">
+            <span class="lcd-num" id="velBox"><span class="fantasma" id="velFantasma" aria-hidden="true">88,8</span><span class="val" id="vVel">0,0</span></span>
+          </div>
+          <div class="lcd-linha" style="--cols:2">
+            <div><span class="k">Distância km</span><span class="v g" id="vDist">0,00</span></div>
+            <div><span class="k">Em movimento</span><span class="v g" id="vMov">00:00</span></div>
+          </div>
+          <div class="lcd-linha">
+            <div><span class="k">Média km/h</span><span class="v" id="vMedia">0,0</span></div>
+            <div><span class="k">Ritmo /km</span><span class="v" id="vRitmo">--</span></div>
+            <div><span class="k">Máx km/h</span><span class="v" id="vMax">0,0</span></div>
+          </div>
+          <div class="lcd-linha">
+            <div><span class="k">Tempo total</span><span class="v" id="vTotal">00:00</span></div>
+            <div><span class="k">Pausas</span><span class="v" id="vPausas">0</span></div>
+            <div><span class="k">Subida m</span><span class="v" id="vSubida">0</span></div>
+          </div>
+        </div>
+      </section>
+
+      <p class="parcial" id="parcial">Parcial a cada 1 km.</p>
+      <p class="aviso-tela" id="avisoTela" hidden></p>
+
+      <div class="controles">
+        <button type="button" class="primary escuro" id="btnPausar">Pausar</button>
+        <button type="button" class="btn2 grande" id="btnFinalizar">Finalizar</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- HISTÓRICO -->
+  <main class="tela" id="telaHistorico" hidden>
+    <header class="topo"><h1>Histórico</h1><span class="lado" id="histQtd"></span></header>
+
+    <section class="device" aria-label="Totais">
+      <div class="lcd">
+        <div class="lcd-top"><b id="perRotulo">Semana</b><span id="perAux"></span></div>
+        <div class="lcd-main">
+          <span class="lcd-num" id="totBox"><span class="fantasma" id="totFantasma" aria-hidden="true">88,8</span><span class="val" id="totKm">0,0</span></span>
+          <span class="lcd-unid">km</span>
+        </div>
+        <div class="lcd-linha">
+          <div><span class="k">Pedais</span><span class="v" id="totN">0</span></div>
+          <div><span class="k">Em movimento</span><span class="v" id="totMov">0:00</span></div>
+          <div><span class="k">Média km/h</span><span class="v" id="totMedia">--</span></div>
+        </div>
+      </div>
+      <div class="modos" role="tablist" aria-label="Período" id="modos">
+        <button type="button" role="tab" data-periodo="semana">Semana</button>
+        <button type="button" role="tab" data-periodo="mes">Mês</button>
+        <button type="button" role="tab" data-periodo="ano">Ano</button>
+        <button type="button" role="tab" data-periodo="total">Total</button>
+      </div>
+    </section>
+
+    <section class="bloco">
+      <div class="bloco-h"><h2>Recordes</h2><span class="lado">pedais com GPS</span></div>
+      <div class="numeros" id="recordes"></div>
+    </section>
+
+    <section class="bloco">
+      <div class="bloco-h"><h2>Pedais</h2></div>
+      <div id="lista"></div>
+    </section>
+
+    <details class="painel" id="manual">
+      <summary>Lançar pedal sem GPS</summary>
+      <form class="painel-corpo" id="formManual" novalidate>
+        <div class="grade2">
+          <div class="campo"><label for="mData">Dia</label><input id="mData" type="date"></div>
+          <div class="campo"><label for="mKm">Distância (km)</label><input id="mKm" inputmode="decimal" autocomplete="off" placeholder="8,4"></div>
+        </div>
+        <div class="grade2">
+          <div class="campo"><label for="mMin">Tempo pedalando (min)</label><input id="mMin" inputmode="numeric" autocomplete="off" placeholder="30"></div>
+          <div class="campo"><label for="mNota">Nota</label><input id="mNota" maxlength="60" autocomplete="off" placeholder="opcional"></div>
+        </div>
+        <p class="hint" id="mMsg">Para um pedal que você esqueceu de gravar. Não entra nos recordes.</p>
+        <button type="submit" class="btn2 cheio">Salvar pedal</button>
+      </form>
+    </details>
+  </main>
+
+  <!-- AJUSTES -->
+  <main class="tela" id="telaAjustes" hidden>
+    <header class="topo"><h1>Ajustes</h1></header>
+
+    <section class="bloco">
+      <h2 class="secao">Gravação</h2>
+      <div class="grupo">
+        <label class="linha"><span><b>Pausa automática</b><small>Para o tempo quando você para no semáforo ou numa parada. A média fica real.</small></span><input type="checkbox" role="switch" id="cfgAutoPausa"></label>
+        <label class="linha"><span><b>Manter a tela ligada</b><small>Com a tela apagada o navegador corta o GPS.</small></span><input type="checkbox" role="switch" id="cfgTela"></label>
+        <label class="linha"><span><b>Precisão mínima do GPS</b><small>Leituras piores que isso são descartadas.</small></span>
+          <select id="cfgPrecisao"><option value="15">15 m</option><option value="25">25 m (padrão)</option><option value="40">40 m</option></select></label>
+      </div>
+    </section>
+
+    <section class="bloco">
+      <h2 class="secao">Voz</h2>
+      <div class="grupo">
+        <label class="linha"><span><b>Aviso falado a cada</b><small>Fala a distância, o tempo do último km e a média.</small></span>
+          <select id="cfgVoz"><option value="0">desligado</option><option value="1">1 km</option><option value="2">2 km</option><option value="5">5 km</option></select></label>
+        <label class="linha"><span><b>Avisar pausas</b><small>Fala "pausa automática" e "retomando".</small></span><input type="checkbox" role="switch" id="cfgVozPausa"></label>
+      </div>
+      <button type="button" class="btn2" id="btnTestarVoz">Testar a voz</button>
+    </section>
+
+    <section class="bloco">
+      <h2 class="secao">Meta</h2>
+      <div class="grupo">
+        <label class="linha"><span><b>Meta da semana (km)</b><small>Aparece na tela inicial. Deixe vazio para não usar.</small></span><input id="cfgMeta" inputmode="decimal" autocomplete="off" placeholder="0"></label>
+      </div>
+    </section>
+
+    <section class="bloco">
+      <h2 class="secao">Seus dados</h2>
+      <p class="hint">Os pedais ficam guardados só neste celular. Faça um backup de vez em quando.</p>
+      <div class="linha-btn">
+        <button type="button" class="btn2" id="btnBackup">Exportar backup</button>
+        <label class="btn2" for="arqBackup">Importar backup</label>
+      </div>
+      <input type="file" id="arqBackup" accept="application/json,.json" hidden>
+      <button type="button" class="btn2 perigo" id="btnApagarTudo">Apagar todos os pedais</button>
+    </section>
+
+    <section class="bloco">
+      <h2 class="secao">Demonstração</h2>
+      <p class="hint">Grava um pedal simulado de uns 6 km em menos de um minuto, para ver o app funcionando sem sair de casa. Ele fica marcado como demonstração.</p>
+      <button type="button" class="btn2" id="btnDemo">Simular um pedal</button>
+    </section>
+
+    <section class="bloco">
+      <h2 class="secao">Como o app calcula</h2>
+      <div class="texto">
+        <p><b>Distância:</b> soma o caminho do GPS depois de filtrar o tremido. Quando o celular informa a velocidade do sensor, a distância sai dela, que é mais precisa.</p>
+        <p><b>Tempo em movimento e pausas:</b> abaixo de 3 km/h por 5 segundos o app entende que você parou. O tempo parado não entra na média.</p>
+        <p><b>Tela bloqueada:</b> o navegador para o GPS com a tela apagada. Se isso acontecer, o trecho entra em linha reta quando o sinal volta e fica marcado no pedal.</p>
+        <p><b>Subida:</b> vem da altitude do GPS, que varia bastante. Serve como estimativa.</p>
+        <p class="hint" id="versao"></p>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- DETALHE DO PEDAL -->
+<section class="sobreposta" id="detalhe" hidden aria-labelledby="dTitulo">
+  <div class="app tela">
+    <div class="d-topo"><button type="button" class="voltar" id="btnVoltar">← Voltar</button><span id="dSelo"></span></div>
+    <div class="d-titulo"><h1 id="dTitulo">Pedal</h1><p id="dSub"></p></div>
+    <canvas class="mapa" id="dMapa" aria-label="Desenho do trajeto"></canvas>
+    <div class="numeros" id="dNumeros"></div>
+    <section class="bloco" id="dGraficoBloco">
+      <div class="bloco-h"><h2>Velocidade</h2><span class="lado">km/h por km</span></div>
+      <div id="dGrafico"></div>
+      <p class="sem-cap" id="dLeitura">Toque no gráfico para ver a velocidade em cada trecho.</p>
+    </section>
+    <section class="bloco" id="dParciaisBloco">
+      <div class="bloco-h"><h2>Parciais</h2><span class="lado">tempo em movimento</span></div>
+      <table class="parciais" id="dParciais"></table>
+    </section>
+    <p class="hint" id="dNotas"></p>
+    <div class="linha-btn">
+      <button type="button" class="btn2" id="btnGpx">Exportar GPX</button>
+      <button type="button" class="btn2 perigo" id="btnApagar">Apagar pedal</button>
+    </div>
+  </div>
+</section>
+
+<nav class="abas" id="abas" aria-label="Telas">
+  <button type="button" data-tela="pedalar" aria-current="page">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="16" r="3.6" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="18" cy="16" r="3.6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M6 16l4-7h6l2 7M10 9l3 7h-7M14.5 6.5h2.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></svg>
+    Pedalar
+  </button>
+  <button type="button" data-tela="historico">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    Histórico
+  </button>
+  <button type="button" data-tela="ajustes">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="16" cy="7" r="2.2" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="10" cy="17" r="2.2" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+    Ajustes
+  </button>
+</nav>
+
+<div class="toast" id="toast" aria-live="polite" hidden></div>
+
+<noscript><p style="padding:16px">O Hodômetro precisa de JavaScript ligado.</p></noscript>
+</body>
+</html>
