@@ -4,8 +4,9 @@ Leia o `README.md` primeiro. Este arquivo diz o que não pode quebrar.
 
 ## O que é
 
-PWA de bike: grava o pedal pelo GPS e funciona offline. HTML, CSS e JavaScript
-puro, sem build e sem dependências. Os dados ficam no IndexedDB do celular.
+Ciclocomputador de bike: grava o pedal pelo GPS e funciona offline. HTML, CSS e
+JavaScript puro, sem build. Roda como PWA e como app Android (Capacitor, com o
+plugin próprio `Gravador`). Os dados ficam no IndexedDB do celular.
 
 ## Regras
 
@@ -25,9 +26,15 @@ puro, sem build e sem dependências. Os dados ficam no IndexedDB do celular.
    (campo `versao`).
 7. **Textos em português do Brasil**, diretos, sem travessão. Erros dizem o que
    aconteceu e o que fazer.
-8. **Visual.** Cores só pelos tokens do topo de `css/app.css`, com valores para o
-   tema claro e o escuro. Números com a fonte do LCD (`--f-lcd`).
+8. **Visual.** Tema único escuro OLED (fundo preto puro). Cores só pelos tokens do
+   topo de `css/app.css`: `--neon` ativo e GPS bom, `--ambar` pausado e sinal fraco,
+   `--vermelho` finalizar e excluir. Números em `--f-num` (Barlow Condensed) com
+   algarismos tabulares, para não dançarem. Botões grandes, de no mínimo 48 px.
 9. **Sem dados pessoais no repositório.** Nada de endereço, rota real ou backup de pedal.
+10. **Finalizar só segurando.** O botão Finalizar precisa ser segurado por 1,5 s
+    (`segurarPara` em `js/app.js`). Não troque por toque simples.
+11. **Ajustes salvos.** `hodometro.cfg` no localStorage tem o campo `v`. Se mudar
+    o formato, suba `v` e converta o antigo em `lerCfg`.
 
 ## App Android (Capacitor 7)
 
@@ -35,8 +42,17 @@ puro, sem build e sem dependências. Os dados ficam no IndexedDB do celular.
   para `www/`, que vai dentro do APK. Arquivo novo do app entra nessa lista.
 - `js/nativo.js` chama os plugins nativos. Use sempre `chamar(plugin, metodo, ...)`:
   nunca devolva o objeto do plugin numa Promise (ele responde a `then` e quebra).
-- GPS com a tela apagada: `FonteNativa` em `js/fontes.js`, plugin
-  `@capacitor-community/background-geolocation`. `fundo: true` liga a notificação.
+- GPS: `FonteNativa` em `js/fontes.js` fala com o plugin `Gravador`
+  (`android/app/src/main/java/io/github/diegopayday/hodometro/`). Sem `fundo`, só
+  observa o sinal antes de sair. Com `fundo: true`, liga o `GravadorService`:
+  serviço em primeiro plano do tipo localização, trava de CPU, notificação ao vivo
+  e arquivo de leituras. O GPS é o do chip (`LocationManager.GPS_PROVIDER`), sem
+  Wi-Fi nem rede. Não troque pelo provedor "fused" do Google.
+- Se o app fechar no meio, `perdidas(desde)` devolve as leituras que o serviço
+  gravou sozinho; `recuperarPerdidas` em `js/app.js` passa pelo motor em ordem.
+  O arquivo só é apagado (`limpar`) depois do pedal salvo.
+- O Java não usa AndroidX (só a API do Android e a do Capacitor). Mudou o Java?
+  O GitHub Actions compila; veja o log da etapa "Gerar APK" se falhar.
 - `android/` é gerado pelo Capacitor e versionado. Depois de mudar plugins:
   `npm run android:sync`.
 - Nunca grave a senha da assinatura em arquivo. Ela fica só no segredo
@@ -60,4 +76,6 @@ npm run android:abrir  abre no Android Studio
   em andamento a cada 5 s, para recuperar se o app fechar.
 - Estados: `aguardando` (sem GPS bom), `movendo`, `parado` (pausa automática ou
   espera antes de sair), `pausado` (pausa manual).
-- `js/app.js` liga o GPS (`js/fontes.js`) ao motor e às telas.
+- `js/app.js` liga o GPS (`js/fontes.js`) ao motor e às telas. Telas: Pedalar,
+  Histórico e Estatísticas (abas), Ajustes (engrenagem) e o resumo do pedal.
+- Avisos: `js/voz.js` (voz do sistema) e `js/vibra.js` (padrões de vibração).

@@ -1,27 +1,41 @@
 # Hodômetro
 
-App de celular para gravar pedal de bike pelo GPS. Mostra distância, velocidade
-atual, média e máxima, ritmo por km, tempo em movimento, tempo total, pausas,
-parciais por km e subida. Funciona sem internet depois de instalado.
-
-É um app web instalável (PWA): abre pelo navegador uma vez, instala na tela
-inicial e depois roda como app, offline. Não tem servidor nem conta: os pedais
+Ciclocomputador no celular. Grava o pedal pelo GPS com a tela bloqueada e o
+celular no bolso, sem internet e sem sinal de operadora. Mostra distância,
+velocidade atual, média e máxima, tempo em movimento e tempo total, ritmo por km,
+pausas, parciais e ganho de elevação. Não tem servidor nem conta: os pedais
 ficam guardados no próprio celular.
 
-## App Android (grava com a tela apagada)
+Existe em duas formas: o **app Android** (recomendado, grava com a tela apagada)
+e a **versão web** (PWA), que precisa da tela ligada.
 
-Esta é a versão recomendada. Grava com a tela bloqueada e o celular no bolso.
-Enquanto grava, aparece a notificação "Hodômetro gravando".
+## App Android
 
 **Instalar ou atualizar:**
 1. No celular, abra https://github.com/diegopayday-del2s/hodometro/releases/latest
 2. Toque em `Hodometro.apk`. Se o Chrome pedir, permita instalar apps desta fonte.
-3. Abra o Hodômetro. Permita a localização ("Durante o uso do app") e as notificações.
-4. Em Configurações > Apps > Hodômetro > Bateria, escolha "Sem restrições".
-   Sem isso, alguns celulares fecham o app no meio do pedal.
+3. Abra o Hodômetro. Permita a localização ("Durante o uso do app", com
+   "Usar local exato" ligado) e as notificações.
+4. Na tela inicial, o cartão **Pronto para o bolso** confere tudo. Se a bateria
+   aparecer em amarelo, toque em **Liberar** e confirme: o Android deixa de cortar
+   a gravação com a tela bloqueada.
 
 Atualizações instalam por cima da versão anterior sem apagar os pedais, porque
-todas saem com a mesma assinatura.
+todas saem com o mesmo `applicationId` e a mesma assinatura. O banco de dados
+dos pedais não muda de formato.
+
+**Como grava no bolso:**
+- O GPS vem direto do chip do celular (satélites GPS, Galileo, GLONASS, BeiDou),
+  sem Wi-Fi, sem rede e sem internet.
+- Um serviço do Android em primeiro plano (tipo localização) segura o GPS e uma
+  trava de CPU mantém o processador lendo com a tela apagada.
+- A notificação na tela de bloqueio mostra distância, tempo em movimento e
+  velocidade, atualizada a cada 2 segundos.
+- Cada leitura também vai para um arquivo. Se o app for fechado no meio do pedal
+  (ou tirado da lista de recentes), o serviço continua gravando e o app recupera
+  as leituras ao abrir de novo.
+- O botão Voltar do Android não fecha o app no meio do pedal: só manda para
+  segundo plano.
 
 **Como o APK é feito:** a cada mudança na branch `main`, o GitHub Actions
 (`.github/workflows/android.yml`) roda os testes, monta o app e publica o APK na
@@ -29,50 +43,59 @@ página de versões. Para assinar, ele usa a chave `android/app/hodometro.keysto
 com a senha guardada no segredo `ANDROID_KEYSTORE_PASSWORD` do repositório.
 Guarde essa senha num lugar seguro: sem ela, uma versão nova não instala por cima.
 
-## Versão web (PWA)
-
-## Instalar no celular
-
-1. Abra o endereço do app no celular (o do GitHub Pages, veja "Publicar" abaixo).
-2. **Android (Chrome):** toque em "Instalar app" no aviso do app ou no menu ⋮ do Chrome.
-3. **iPhone (Safari):** toque em Compartilhar e depois em "Adicionar à Tela de Início".
-4. Abra pelo ícone novo. Na primeira vez, permita a localização.
-
 ## Usar
 
-- **Antes de sair:** abra o app e espere o cartão do GPS ficar verde ("GPS pronto").
-  Num lugar aberto leva de 5 a 30 segundos.
-- **Começar pedal:** a tela fica ligada sozinha enquanto grava. Prenda o celular
-  no guidão. O status no topo mostra Gravando, Pausa automática, Pausado ou Sinal fraco.
-- **Pausa automática:** abaixo de 3 km/h por 5 segundos o tempo para de contar.
-  Volta sozinho quando você sai. O tempo parado não entra na média.
+- **Antes de sair:** o cartão **Sinal do GPS** mostra Buscando, Fraco, Bom ou
+  Excelente, a precisão em metros e os satélites em uso. Num lugar aberto leva de
+  10 segundos a 1 minuto.
+- **Começar pedal:** pode bloquear a tela e guardar o celular. No topo do painel,
+  o sol liga o **modo guidão** (tela sempre acesa, para usar no suporte da bike).
+- **Painel:** distância e velocidade em destaque; embaixo, tempo em movimento,
+  média, máxima e altimetria; na última linha, ritmo, tempo total e pausas.
+- **Pausa automática:** abaixo de 3 km/h por 5 segundos o tempo em movimento para.
+  Volta assim que você passa de 5 km/h. A média usa só o tempo em movimento, então
+  o semáforo não derruba a média.
+- **Avisos no bolso:** voz e vibração a cada 1 ou 5 km (distância, média e tempo
+  do último km). Vibração diferente para cada caso: km, 2 toques; pausou, 1 toque
+  longo; voltou, 3 toques curtos. Liga e desliga na tela inicial ou no topo do painel.
 - **Pausar:** para quando você quer descer da bike e andar sem contar.
-- **Finalizar:** toque duas vezes (para não encerrar sem querer). Abre o resumo
-  com desenho do trajeto, gráfico de velocidade e parciais por km.
-- **Voz:** em Ajustes, aviso falado a cada 1, 2 ou 5 km com o tempo do último km e a média.
-- **Exportar GPX:** no resumo do pedal. O Strava importa em "Enviar atividade".
+- **Finalizar:** segure o botão vermelho por 1,5 segundo, com a barra enchendo.
+  Toque rápido não encerra, para não acabar o pedal sem querer no bolso.
+- **Histórico:** cada pedal num cartão com data, hora, distância, tempo em
+  movimento, média, máxima e subida. Tocando, abre o resumo completo (bom para
+  print), com desenho do trajeto, gráfico de velocidade e parciais. Dali dá para
+  compartilhar o resumo em texto, exportar GPX (o Strava importa em "Enviar
+  atividade") ou excluir, com confirmação.
+- **Estatísticas:** km no total, no mês e na semana, horas pedaladas, gráfico da
+  semana, meta e recordes pessoais (maior pedal, maior velocidade, maior média,
+  melhor km e maior subida).
+- **Ajustes** (engrenagem na tela inicial): pausa automática, precisão do GPS,
+  avisos, bateria, meta, backup e demonstração.
+- **Lançar pedal sem GPS:** no fim do Histórico, para um pedal que não foi
+  gravado. O tempo é opcional.
 - **Backup:** em Ajustes. Como tudo fica no celular, exporte de vez em quando.
-- **Demonstração:** em Ajustes, "Simular um pedal" grava um pedal falso de uns
-  6 km em menos de um minuto, para testar sem sair de casa.
 
 ## Como calcula
 
 O motor fica em `js/rastreador.js` e não depende da tela. Os passos:
 
-1. Descarta leituras com precisão pior que 25 m (ajustável) e saltos impossíveis
-   (acima de 90 km/h).
-2. Passa a posição por um filtro de Kalman. Quando o celular informa a velocidade
-   do sensor (Doppler, quase todo celular com GPS informa), o filtro usa
-   posição, velocidade e direção juntas.
-3. Só soma distância em movimento e acima de um passo mínimo, para o tremido
-   do GPS parado não virar quilômetro.
-4. Com Doppler, a distância de cada trecho sai da velocidade integrada no tempo,
+1. Descarta leituras com precisão pior que 15 m (ajustável para 20 ou 25 m).
+2. Descarta saltos: acima de 85 km/h, Doppler acima de 85 km/h, ou posição que
+   pulou mais do que a velocidade medida permite andar desde a última leitura.
+3. Passa a posição por um filtro de Kalman. Quando o celular informa a velocidade
+   do sensor (Doppler, todo GPS de celular informa), o filtro usa posição,
+   velocidade e direção juntas.
+4. Só soma distância em movimento, acima de 2 km/h e quando andou mais que a margem
+   de erro da posição, para o tremido do GPS parado não virar quilômetro.
+5. Com Doppler, a distância de cada trecho sai da velocidade integrada no tempo,
    desde que bata com o deslocamento do GPS.
-5. Parada: com Doppler, velocidade abaixo de 2,9 km/h por 5 s. Só com posição,
-   ficar num raio de 8 m por 12 s. Nos dois casos o tempo é devolvido desde o
-   momento em que você parou, então a média fica certa.
-6. Tela bloqueada ou túnel: quando o sinal volta, o trecho entra em linha reta
-   e fica tracejado no desenho. O tempo em movimento do trecho sai da sua média.
+6. Velocidade na tela: mediana das 3 últimas leituras (tira o pico) e média móvel,
+   para o número não pular.
+7. Parada: com Doppler, abaixo de 2,9 km/h por 5 s. Só com posição, ficar num raio
+   de 8 m por 12 s. Nos dois casos o tempo é devolvido desde o momento em que você
+   parou, então a média fica certa.
+8. Túnel ou sinal perdido: quando o sinal volta, o trecho entra em linha reta e
+   fica tracejado no desenho. O tempo em movimento do trecho sai da sua média.
 
 Precisão nos testes com pedais simulados (tremido de 4 m, como um celular comum;
 retas, semáforos, curvas, esquinas e um pedal de cidade de 6 km, 10 repetições
@@ -80,18 +103,25 @@ cada, com e sem perda de 20% das leituras). Para ver a tabela completa: `npm run
 
 | Situação | Erro de distância (pior caso) | Erro no tempo em movimento (pior caso) |
 |---|---|---|
-| Celular informa velocidade (a maioria) | 1% (2% abaixo de 10 km/h com sinal falhando) | 11 s num pedal de 18 min |
+| Celular informa velocidade (todo celular com GPS) | 1% (2% abaixo de 10 km/h com sinal falhando) | 11 s num pedal de 18 min |
 | Celular só informa posição | 3% | 25 s num pedal de 18 min |
 
 ## Limites que você precisa saber
 
-- **Tela apagada:** o navegador para o GPS quando a tela apaga ou o app vai para
-  segundo plano. Por isso o app mantém a tela ligada. Se ela apagar, o trecho
-  entra em linha reta, o que pode encurtar um caminho cheio de curvas.
-  Gravar com o celular no bolso e a tela apagada só com app nativo (veja "Próximos passos").
+- **Versão web:** o navegador para o GPS quando a tela apaga. Por isso ela mantém
+  a tela ligada. Para o bolso, use o app Android.
 - **Subida:** vem da altitude do GPS, que varia bastante. É estimativa.
-- **Dados:** ficam só no navegador do celular. Desinstalar o app ou limpar os
-  dados do site apaga os pedais. Use o backup.
+- **Voz sem internet:** usa a voz do Android. Se ela não falar offline, abra
+  Configurações > Gerenciamento geral > Conversão de texto em voz e baixe o
+  português do Brasil.
+- **Dados:** ficam só no celular. Desinstalar o app apaga os pedais. Use o backup.
+
+## Versão web (PWA)
+
+1. Abra o endereço do app no celular (o do GitHub Pages, veja "Publicar" abaixo).
+2. **Android (Chrome):** toque em "Instalar app" no aviso do app ou no menu ⋮ do Chrome.
+3. **iPhone (Safari):** toque em Compartilhar e depois em "Adicionar à Tela de Início".
+4. Abra pelo ícone novo. Na primeira vez, permita a localização.
 
 ## Desenvolver e polir no Antigravity (Windows)
 
@@ -113,27 +143,34 @@ Testar no celular pelo cabo, com Android Studio:
 4. O app instalado pelo Android Studio tem outra assinatura. Antes, faça backup
    no app e desinstale a versão do GitHub. Para voltar, faça o inverso.
 
-
-
-Não tem build nem dependência: é HTML, CSS e JavaScript puro (módulos ES).
+O app é HTML, CSS e JavaScript puro (módulos ES), sem build. O Android usa o
+Capacitor só como casca, mais o plugin `Gravador` escrito no próprio projeto.
 
 ```
 index.html            telas
-css/app.css           visual (tokens de cor no topo, tema claro e escuro)
-js/app.js             controle das telas, GPS, gravação, voz, exportação
+css/app.css           visual (tokens de cor no topo, tema escuro OLED)
+js/app.js             controle das telas, GPS, gravação, avisos, exportação
 js/rastreador.js      motor de cálculo (sem DOM, testado)
 js/geo.js             distância (haversine), projeção e filtros de Kalman
 js/simulador.js       gera leituras falsas de GPS para testes e demonstração
 js/formato.js         números e datas em português, totais, recordes
 js/armazem.js         IndexedDB (pedais e pedal em andamento)
 js/desenho.js         desenho do trajeto (canvas) e gráfico de velocidade (SVG)
-js/fontes.js          leitura do GPS e fonte simulada
+js/fontes.js          leitura do GPS (navegador, Android) e fonte simulada
+js/nativo.js          ponte para os plugins do Android
 js/voz.js             avisos falados
+js/vibra.js           avisos por vibração
 js/gpx.js             exportação GPX
 sw.js                 service worker (offline)
 manifest.webmanifest  instalação
 tests/                testes (node --test)
-ferramentas/          relatório de precisão
+ferramentas/          relatório de precisão e cópia do app para o Android
+android/              projeto Android (Capacitor)
+  app/src/main/java/io/github/diegopayday/hodometro/
+    GravadorPlugin.java   ponte JS: GPS, notificação, bateria, vibração, tela
+    GravadorService.java  serviço em primeiro plano: GPS, trava de CPU, arquivo
+    LeitorGnss.java       GPS direto do chip e contagem de satélites
+    MainActivity.java     registra o plugin e trata o botão Voltar
 ```
 
 Comandos (precisa de Node 20 ou mais novo):
@@ -162,10 +199,11 @@ ler o `AGENTS.md` antes de começar.
 
 ## Ideias dos apps pagos
 
-Já está no app (inspirado em Strava, Ride with GPS, Cyclemeter e MapMyRide):
-pausa automática com tempo em movimento separado do total, parciais por km,
-aviso por voz, velocidade máxima, subida, recordes pessoais, meta semanal,
-exportação GPX e recuperação do pedal se o app fechar no meio.
+Já está no app (inspirado em Strava, Ride with GPS, Cyclemeter, MapMyRide e nos
+ciclocomputadores Garmin e Wahoo): pausa automática com tempo em movimento
+separado do total, parciais por km, aviso por voz e por vibração, notificação ao
+vivo na tela de bloqueio, modo guidão, velocidade máxima, subida, recordes
+pessoais, meta semanal, exportação GPX e recuperação do pedal se o app fechar no meio.
 
 Próximos passos possíveis:
 
