@@ -188,3 +188,139 @@ export function graficoVelocidade(pedal, leitura) {
   });
   return svg;
 }
+
+/** Perfil de elevação ao longo da distância, com dados de altitude suavizados. */
+export function serieElevacao(pedal) {
+  const pts = pedal.pontos || [];
+  if (pts.length < 3) return null;
+  const comAlt = pts.filter(p => Number.isFinite(p[3]));
+  if (comAlt.length < 4) return null;
+
+  let acum = 0;
+  const brutos = [{ d: 0, alt: Number.isFinite(pts[0][3]) ? pts[0][3] : comAlt[0][3] }];
+  for (let i = 1; i < pts.length; i++) {
+    const d = distancia(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1]);
+    acum += d;
+    if (Number.isFinite(pts[i][3])) {
+      brutos.push({ d: acum, alt: pts[i][3] });
+    }
+  }
+  if (acum < 150 || brutos.length < 4) return null;
+
+  const total = acum;
+  const n = Math.max(12, Math.min(80, Math.round(total / 80)));
+  const passo = total / n;
+  const serie = [];
+
+  for (let k = 0; k < n; k++) {
+    const dAlvo = (k + 0.5) * passo;
+    let maisPerto = brutos[0];
+    for (const b of brutos) {
+      if (Math.abs(b.d - dAlvo) < Math.abs(maisPerto.d - dAlvo)) maisPerto = b;
+    }
+    serie.push({ d: dAlvo, alt: maisPerto.alt });
+  }
+
+  // Média móvel suave de 3 pontos
+  const suave = serie.map((s, k) => {
+    const viz = [serie[k - 1]?.alt, s.alt, serie[k + 1]?.alt].filter(x => x != null);
+    const m = viz.reduce((a, b) => a + b, 0) / viz.length;
+    return { d: s.d, alt: Math.round(m * 10) / 10 };
+  });
+
+  const alts = suave.map(s => s.alt);
+  const minAlt = Math.min(...alts);
+  const maxAlt = Math.max(...alts);
+
+  return {
+    total,
+    pontos: suave,
+    minAlt: Math.floor(minAlt),
+    maxAlt: Math.ceil(maxAlt),
+    variacao: Math.round(maxAlt - minAlt),
+    subida: pedal.subida || 0
+  };
+}
+
+/** Gráfico de área da elevação (altitude em metros) por distância com leitura interativa. */
+export function graficoElevacao(pedal, leitura) {
+  const dados = serieElevacao(pedal);
+  if (!dados || dados.pontos.length < 2) return null;
+
+  const { total, pontos, minAlt, maxAlt } = dados;
+  const W = 360, H = 170, esq = 38, dir = 10, topo = 14, base = 24;
+  const svg = document.createElementNS(SVG, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('class', 'grafico');
+  svg.setAttribute('role', 'img');
+
+  const margemY = Math.max(6, (maxAlt - minAlt) * 0.15);
+  const chao = Math.floor(minAlt - margemY);
+  const teto = Math.ceil(maxAlt + margemY);
+  const rangeY = Math.max(10, teto - chao);
+
+  const x = d => esq + d / total * (W - esq - dir);
+  const y = alt => topo + (1 - (alt - chao) / rangeY) * (H - topo - base);
+
+  const el = (tag, attrs, texto) => {
+    const e = document.createElementNS(SVG, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (texto != null) e.textContent = texto;
+    svg.append(e);
+    return e;
+  };
+  svg.setAttribute('aria-label', `Perfil de elevação de ${minAlt} a ${maxAlt} m`);
+
+  // Linhas de grade e valores no eixo Y
+  const passoAlt = [10, 20, 50, 100, 200, 500].find(p => rangeY / p <= 5) || 50;
+  const iniY = Math.ceil(chao / passoAlt) * passoAlt;
+  for (let a = iniY; a <= teto; a += passoAlt) {
+    el('line', { x1: esq, x2: W - dir, y1: y(a), y2: y(a), class: 'g-grade' });
+    el('text', { x: esq - 6, y: y(a) + 4, class: 'g-rotulo', 'text-anchor': 'end' }, `${a}m`);
+  }
+
+  // Eixo X (quilômetros)
+  const kmTotal = total / 1000;
+  const passoKm = [0.5, 1, 2, 5, 10, 20, 50].find(p => kmTotal / p <= 6) || 100;
+  for (let k = 0; k <= kmTotal + 1e-9; k += passoKm) {
+    el('text', { x: x(k * 1000), y: H - 6, class: 'g-rotulo', 'text-anchor': k === 0 ? 'start' : 'middle' }, k === 0 ? '0 km' : String(k).replace('.', ','));
+  }
+
+  // Área e contorno da elevação
+  const coords = pontos.map(p => [x(p.d), y(p.alt)]);
+  const linhaD = coords.map((c, i) => `${i ? 'L' : 'M'}${c[0].toFixed(1)} ${c[1].toFixed(1)}`).join('');
+  const areaD = `${linhaD}L${coords[coords.length - 1][0].toFixed(1)} ${y(chao)}L${coords[0][0].toFixed(1)} ${y(chao)}Z`;
+
+  el('path', { d: areaD, class: 'g-area-alt' });
+  el('path', { d: linhaD, class: 'g-linha-alt' });
+
+  // Ponto e linha guia de leitura interativa
+  const guia = el('line', { x1: 0, x2: 0, y1: topo, y2: H - base, class: 'g-guia', visibility: 'hidden' });
+  const ponto = el('circle', { r: 4.5, class: 'g-ponto-alt', visibility: 'hidden' });
+
+  const mostrar = ev => {
+    const r = svg.getBoundingClientRect();
+    const px = (ev.clientX - r.left) / r.width * W;
+    const d = (px - esq) / (W - esq - dir) * total;
+    let melhor = null;
+    for (const p of pontos) {
+      if (!melhor || Math.abs(p.d - d) < Math.abs(melhor.d - d)) melhor = p;
+    }
+    if (!melhor) return;
+    const gx = x(melhor.d), gy = y(melhor.alt);
+    guia.setAttribute('x1', gx); guia.setAttribute('x2', gx); guia.setAttribute('visibility', 'visible');
+    ponto.setAttribute('cx', gx); ponto.setAttribute('cy', gy); ponto.setAttribute('visibility', 'visible');
+    const diff = Math.round(melhor.alt - pontos[0].alt);
+    const diffTxt = diff >= 0 ? `+${diff}` : `${diff}`;
+    if (leitura) leitura.textContent = `km ${km1(melhor.d)}: ${Math.round(melhor.alt)} m (${diffTxt} m)`;
+  };
+
+  svg.addEventListener('pointermove', mostrar);
+  svg.addEventListener('pointerdown', mostrar);
+  svg.addEventListener('pointerleave', () => {
+    guia.setAttribute('visibility', 'hidden'); ponto.setAttribute('visibility', 'hidden');
+    if (leitura) leitura.textContent = 'Toque no gráfico para ver a altitude em cada trecho.';
+  });
+
+  return svg;
+}

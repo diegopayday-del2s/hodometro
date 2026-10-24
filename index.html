@@ -85,7 +85,7 @@
   <!-- ROTAS -->
   <main class="tela" id="telaRotas" hidden>
     <header class="barra"><h1>Rotas</h1><button type="button" class="icone" data-ajustes aria-label="Ajustes"><svg><use href="#i-engrenagem"/></svg></button></header>
-    <p class="hint">O app reconhece sozinho os caminhos que você repete. Faça o mesmo caminho duas vezes e ele aparece aqui, com seu melhor tempo. No resumo de qualquer pedal dá para salvar o caminho como rota.</p>
+    <p class="hint" id="hintRotas" hidden>Caminhos que você repete com seu melhor tempo e evolução.</p>
     <div id="listaRotas" class="feed"></div>
   </main>
 
@@ -138,6 +138,7 @@
         <div class="status" id="status" aria-live="polite"><span class="ponto" aria-hidden="true"></span><b id="statusTxt">Procurando GPS</b></div>
         <span class="status-gps" id="statusGps"></span>
         <div class="acoes-topo">
+          <button type="button" class="icone" id="tMapa" aria-pressed="false" aria-label="Alternar mapa ao vivo"><svg><use href="#i-rota"/></svg></button>
           <button type="button" class="icone" id="tTela" aria-pressed="false" aria-label="Manter a tela acesa (modo guidão)"><svg><use href="#i-sol"/></svg></button>
           <button type="button" class="icone" id="tVoz" aria-pressed="false" aria-label="Aviso por voz"><svg><use href="#i-voz"/></svg></button>
           <button type="button" class="icone" id="tVibra" aria-pressed="false" aria-label="Aviso por vibração"><svg><use href="#i-vibra"/></svg></button>
@@ -163,6 +164,17 @@
           <div><span class="rot">Ritmo</span><b><span id="vRitmo">--</span><small>/km</small></b></div>
           <div><span class="rot">Tempo total</span><b id="vTotal">00:00</b></div>
           <div><span class="rot">Pausas</span><b id="vPausas">0</b></div>
+        </div>
+      </section>
+
+      <section class="painel-mapa-vivo" id="painelMapaAoVivo" hidden>
+        <div class="mapa-ao-vivo-topo">
+          <canvas id="mapaAoVivoGravando" aria-label="Trajeto ao vivo no mapa"></canvas>
+        </div>
+        <div class="mini-painel-ao-vivo">
+          <div><span class="rot">Distância</span><b><span id="mvDist">0,00</span><small>km</small></b></div>
+          <div><span class="rot">Velocidade</span><b><span id="mvVel">0,0</span><small>km/h</small></b></div>
+          <div><span class="rot">Em movimento</span><b id="mvMov">00:00</b></div>
         </div>
       </section>
 
@@ -298,6 +310,10 @@
         <label class="btn2" for="arqBackup">Importar backup</label>
       </div>
       <input type="file" id="arqBackup" accept="application/json,.json" hidden>
+      <div class="linha-btn">
+        <label class="btn2" for="arqGpx">Importar pedal (GPX do Strava)</label>
+      </div>
+      <input type="file" id="arqGpx" accept=".gpx,application/gpx+xml,text/xml" multiple hidden>
       <button type="button" class="btn2 perigo" id="btnApagarTudo">Apagar todos os pedais</button>
     </section>
 
@@ -340,6 +356,11 @@
       <div id="dGrafico"></div>
       <p class="sem-cap" id="dLeitura">Toque no gráfico para ver a velocidade em cada trecho.</p>
     </section>
+    <section class="bloco" id="dElevacaoBloco" hidden>
+      <div class="bloco-h"><h2>Elevação</h2><span class="lado" id="dElevacaoSub">metros de altitude</span></div>
+      <div id="dElevacaoGrafico"></div>
+      <p class="sem-cap" id="dElevacaoLeitura">Toque no gráfico para ver a altitude em cada trecho.</p>
+    </section>
     <section class="bloco" id="dParciaisBloco">
       <div class="bloco-h"><h2>Parciais</h2><span class="lado">tempo em movimento</span></div>
       <table class="parciais" id="dParciais"></table>
@@ -371,6 +392,11 @@
       <div class="bloco-h"><h2>Horas de atividade</h2></div>
       <p class="hint" id="rHorasTxt"></p>
       <div id="rHoras"></div>
+    </section>
+    <section class="bloco" id="rElevacaoBloco" hidden>
+      <div class="bloco-h"><h2>Elevação da rota</h2><span class="lado">metros de altitude</span></div>
+      <div id="rElevacaoGrafico"></div>
+      <p class="sem-cap" id="rElevacaoLeitura">Toque no gráfico para ver a altitude em cada trecho.</p>
     </section>
     <section class="bloco">
       <div class="bloco-h"><h2>Suas tentativas</h2><span class="lado">tempo em movimento</span></div>

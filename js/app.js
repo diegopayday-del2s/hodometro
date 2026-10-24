@@ -6,8 +6,8 @@ import { FonteGPS, FonteSimulada, FonteNativa } from './fontes.js';
 import { ehNativo, chamar } from './nativo.js';
 import { falar, temVoz } from './voz.js';
 import { vibrar, temVibracao } from './vibra.js';
-import { gerarGPX } from './gpx.js';
-import { desenharTrajeto, graficoVelocidade } from './desenho.js';
+import { gerarGPX, converterGPXEmPedal } from './gpx.js';
+import { desenharTrajeto, graficoVelocidade, graficoElevacao } from './desenho.js';
 import { trajetoNoMapa, posicaoNoMapa } from './mapa.js';
 import { desenharStory, pngBase64 } from './story.js';
 import { progresso, resumoProgresso, avaliarMeta, PERIODOS } from './progresso.js';
@@ -16,7 +16,7 @@ import { graficoProgresso, histogramaHoras, anel } from './graficos.js';
 import { $, $$, h, icone, aviso, confirmar, pedirTexto, segurarPara, quandoAparecer } from './ui.js';
 import { NOME_APP } from './marca.js';
 
-export const VERSAO = '1.3.0';
+export const VERSAO = '1.3.1';
 
 // No app Android o GPS vem do chip e segue com a tela apagada; no navegador, não
 const NATIVO = ehNativo();
@@ -69,6 +69,8 @@ const S = {
   perm: { local: null, notif: null, bateria: null },
   mapaVivo: null,     // última posição desenhada no mapa do Gravar
   telaAcesa: false,   // modo guidão
+  modoMapaAoVivo: false,
+  ultimoMapaAoVivo: 0,
   wake: null,
   wakeFalhou: false,
   instalar: null,
@@ -493,6 +495,10 @@ function pararGravacao() {
   clearInterval(relogio);
   if (S.demo && S.fonte) S.fonte.parar();
   S.telaAcesa = false;
+  S.modoMapaAoVivo = false;
+  $('#tMapa').setAttribute('aria-pressed', 'false');
+  $('.painel-pedal').hidden = false;
+  $('#painelMapaAoVivo').hidden = true;
   if (NATIVO) chamar('Gravador', 'manterTela', { ligada: false }).catch(() => {});
   else soltarWake();
   S.r = null; S.fonte = null; S.demo = false; S.guia = null; S.rotaEscolhida = null;
@@ -640,6 +646,8 @@ function cardRota(r) {
 
 function renderRotas() {
   const lista = rotasVisiveis().sort((a, b) => (S.tentativas[b.id] || []).length - (S.tentativas[a.id] || []).length);
+  const hint = $('#hintRotas');
+  if (hint) hint.hidden = lista.length === 0;
   $('#listaRotas').replaceChildren(...(lista.length ? lista.map(cardRota) : [h('div', { class: 'vazio' },
     h('p', { text: 'Nenhuma rota ainda. Quando você repetir um caminho, ele aparece aqui sozinho. Também dá para salvar qualquer pedal como rota, no resumo dele.' }))]));
 }
@@ -746,6 +754,26 @@ function escolherRota() {
   if (typeof d.showModal === 'function') d.showModal();
 }
 
+function renderMapaAoVivo(forcar = false) {
+  const canvas = $('#mapaAoVivoGravando');
+  if (!canvas || !S.r) return;
+  const agora = Date.now();
+  if (!forcar && S.ultimoMapaAoVivo && agora - S.ultimoMapaAoVivo < 1200) return;
+  S.ultimoMapaAoVivo = agora;
+
+  const pts = S.r.pontos;
+  if (!pts || pts.length < 2) {
+    if (S.ultimaLeitura) {
+      posicaoNoMapa(canvas, S.ultimaLeitura.lat, S.ultimaLeitura.lon, S.ultimaLeitura.acc);
+    }
+    return;
+  }
+  desenharTrajeto(canvas, { pontos: pts, lacunas: S.r.lacunas });
+  if (S.cfg.mapa) {
+    trajetoNoMapa(canvas, pts, { lacunas: (S.r.lacunas || []).map(l => l.i) });
+  }
+}
+
 function renderPainel() {
   if (!S.r) return;
   const p = S.r.painel(S.fonte.agora());
@@ -759,6 +787,12 @@ function renderPainel() {
   $('#vRitmo').classList.toggle('nd', p.ritmo == null);
   $('#vTotal').textContent = F.duracao(p.tempoTotal);
   $('#vPausas').textContent = String(p.pausas);
+
+  // Mini painel quando o mapa ao vivo está ativo
+  $('#mvDist').textContent = F.kmAoVivo(p.distancia);
+  $('#mvVel').textContent = F.kmh(p.velAtual);
+  $('#mvMov').textContent = F.duracao(p.tempoMov);
+  if (S.modoMapaAoVivo) renderMapaAoVivo();
 
   let classe = p.estado, txt;
   if (p.estado === 'aguardando') txt = 'Procurando GPS';
@@ -1050,6 +1084,22 @@ function abrirDetalhe(p) {
   $('#dGraficoBloco').hidden = !temPontos;
   if (temPontos) $('#dGrafico').replaceChildren(graficoVelocidade(p, $('#dLeitura')));
 
+  const elElevBloco = $('#dElevacaoBloco');
+  const elElevGraf = $('#dElevacaoGrafico');
+  const elElevLeit = $('#dElevacaoLeitura');
+  elElevGraf.replaceChildren();
+  if (temPontos) {
+    const gElev = graficoElevacao(p, elElevLeit);
+    if (gElev) {
+      elElevGraf.append(gElev);
+      elElevBloco.hidden = false;
+    } else {
+      elElevBloco.hidden = true;
+    }
+  } else {
+    elElevBloco.hidden = true;
+  }
+
   const parc = p.parciais || [];
   $('#dParciaisBloco').hidden = !parc.length;
   if (parc.length) {
@@ -1133,6 +1183,24 @@ function abrirRota(r, soAtualizar = false) {
     ? `Você costuma sair entre ${pico}h e ${pico + 1}h. A barra laranja é a hora de agora.`
     : 'Os horários aparecem depois da primeira vez nesta rota.';
   $('#rHoras').replaceChildren(histogramaHoras(e.horas));
+
+  const rElevBloco = $('#rElevacaoBloco');
+  const rElevGraf = $('#rElevacaoGrafico');
+  const rElevLeit = $('#rElevacaoLeitura');
+  rElevGraf.replaceChildren();
+  const pedalComAlt = (e.pedais || []).find(p => p.pontos && p.pontos.some(pt => Number.isFinite(pt[3])));
+  if (pedalComAlt) {
+    const gElev = graficoElevacao(pedalComAlt, rElevLeit);
+    if (gElev) {
+      rElevGraf.append(gElev);
+      rElevBloco.hidden = false;
+    } else {
+      rElevBloco.hidden = true;
+    }
+  } else {
+    rElevBloco.hidden = true;
+  }
+
   const ordem = e.pedais.filter(p => p.tempoMov > 0).sort((a, b) => a.tempoMov - b.tempoMov).map(p => p.id);
   const medalha = ['ouro', 'prata', 'bronze'];
   $('#rTentativas').replaceChildren(...(e.pedais.length ? e.pedais.slice().reverse().map(p => {
@@ -1370,6 +1438,14 @@ function ligarEventos() {
     aplicarTela();
     aviso(S.telaAcesa ? 'Modo guidão: a tela fica acesa.' : NATIVO ? 'A tela volta a apagar sozinha. A gravação continua.' : 'A tela pode apagar. No navegador o GPS para com ela apagada.');
   });
+  $('#tMapa').addEventListener('click', () => {
+    S.modoMapaAoVivo = !S.modoMapaAoVivo;
+    $('#tMapa').setAttribute('aria-pressed', String(S.modoMapaAoVivo));
+    $('.painel-pedal').hidden = S.modoMapaAoVivo;
+    $('#painelMapaAoVivo').hidden = !S.modoMapaAoVivo;
+    if (S.modoMapaAoVivo) renderMapaAoVivo(true);
+    else renderPainel();
+  });
 
   $('#btnPausar').addEventListener('click', () => {
     if (!S.r) return;
@@ -1465,6 +1541,30 @@ function ligarEventos() {
       aviso(`${plural(validos.length, 'pedal importado', 'pedais importados')}.`);
     } catch {
       aviso('Não consegui ler esse arquivo. Escolha um backup exportado pelo app.');
+    }
+  });
+  $('#arqGpx').addEventListener('change', async e => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (!files.length) return;
+    let importados = 0;
+    for (const arq of files) {
+      try {
+        const texto = await arq.text();
+        const pedal = converterGPXEmPedal(texto);
+        await A.salvarPedal(pedal);
+        S.pedais.push(pedal);
+        importados++;
+      } catch (err) {
+        console.warn('Erro ao importar GPX:', arq.name, err);
+      }
+    }
+    if (importados > 0) {
+      atualizarRotas();
+      aviso(`${importados} ${plural(importados, 'pedal importado', 'pedais importados')} do Strava!`);
+      render();
+    } else {
+      aviso('Não foi possível importar os pedais desse arquivo GPX.');
     }
   });
   $('#btnApagarTudo').addEventListener('click', async () => {

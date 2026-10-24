@@ -1,13 +1,13 @@
-// Mapa de fundo atrás do trajeto: blocos do CARTO (estilo claro, dados do
-// OpenStreetMap). Só aparece com internet. Sem ela, ou se algum bloco não
-// carregar, a função devolve false e fica o desenho de sempre (desenho.js).
+// Mapa de fundo atrás do trajeto: blocos do OpenStreetMap.
+// Só aparece com internet. Sem ela, ou se algum bloco não carregar, a função
+// devolve false e fica o desenho de sempre (desenho.js).
 // A gravação do pedal nunca depende disto.
 
 const TAM = 256;
 const ZOOM_MAX = 17;
 const ESPERA = 6000;   // ms para os blocos chegarem
-const ATRIBUICAO = '© OpenStreetMap © CARTO';
-const url = (z, x, y) => `https://${'abcd'[(x + y) % 4]}.basemaps.cartocdn.com/light_all/${z}/${x}/${y}@2x.png`;
+const ATRIBUICAO = '© OpenStreetMap';
+const url = (z, x, y) => `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
 
 const px = (lon, z) => (lon + 180) / 360 * TAM * 2 ** z;
 const py = (lat, z) => {

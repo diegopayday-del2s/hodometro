@@ -100,7 +100,7 @@ small { font-weight: 600; color: var(--muted); }
 }
 .btn2.perigo { color: var(--vermelho); }
 .btn2.vermelho { background: var(--vermelho); color: #fff; border-color: var(--vermelho); }
-.link { appearance: none; border: 0; background: none; color: var(--laranja-texto); font-weight: 700; padding: 6px 0; }
+.link { appearance: none; border: 0; background: none; color: var(--laranja-texto); font-weight: 700; padding: 10px 4px; min-height: 44px; display: inline-flex; align-items: center; }
 .linha-btn { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
 
 /* Blocos e cartões */
@@ -192,7 +192,7 @@ small { font-weight: 600; color: var(--muted); }
 .check small { display: block; font-weight: 400; font-size: 14px; line-height: 1.35; }
 .check.ruim small { color: var(--ambar); }
 
-.opcoes-gravar { display: grid; gap: 12px; }
+.opcoes-gravar { display: grid; gap: 12px; padding-bottom: 24px; }
 .linha-opcao { appearance: none; width: 100%; text-align: left; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; border: 1px solid var(--line); background: var(--surface); border-radius: 16px; padding: 12px 14px; }
 .linha-opcao .ic { color: var(--laranja); }
 .linha-opcao b { display: block; font-weight: 700; }
@@ -208,10 +208,20 @@ small { font-weight: 600; color: var(--muted); }
 .seg button + button { border-left: 1px solid var(--line); }
 .seg button[aria-pressed="true"] { background: var(--laranja); color: var(--on-laranja); }
 
-.iniciar-area {
-  position: sticky; bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px)); z-index: 5;
-  display: grid; justify-items: center; gap: 4px; padding: 14px 0 10px; margin: 0 -16px;
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), #fff 28%);
+#pronto {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: calc(100dvh - var(--nav-h) - env(safe-area-inset-bottom, 0px) - 30px);
+}
+#pronto .iniciar-area {
+  position: relative;
+  bottom: auto;
+  margin-top: auto;
+  padding: 16px 0 20px;
+  margin-left: 0;
+  margin-right: 0;
+  background: none;
 }
 .iniciar {
   appearance: none; border: 0; width: 96px; height: 96px; border-radius: 50%; background: var(--laranja); color: #fff;
@@ -267,6 +277,17 @@ body.est-aguardando .heroi.vel .num, body.est-fraco .heroi.vel .num { color: var
 .aviso-tela { border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; font-size: 14px; color: var(--ink-2); margin: 0; background: var(--surface-2); }
 .aviso-tela.alerta-tela { border-color: #f3d7a3; background: var(--ambar-suave); color: var(--ink); }
 
+/* Painel com mapa ao vivo durante o pedal */
+.painel-mapa-vivo { display: grid; gap: 10px; }
+.mapa-ao-vivo-topo { border-radius: 18px; overflow: hidden; border: 1px solid var(--line); height: 260px; background: var(--surface-2); position: relative; }
+.mapa-ao-vivo-topo canvas { width: 100%; height: 100%; display: block; }
+.mini-painel-ao-vivo { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 10px 12px; text-align: center; }
+.mini-painel-ao-vivo > div { display: grid; gap: 2px; }
+.mini-painel-ao-vivo b { font-size: 20px; line-height: 1.1; color: var(--ink); }
+.mini-painel-ao-vivo small { font-size: 13px; margin-left: 2px; }
+.mini-painel-ao-vivo #mvVel { color: var(--laranja); }
+body.est-parado .mini-painel-ao-vivo #mvVel, body.est-pausado .mini-painel-ao-vivo #mvVel { color: var(--ambar); }
+
 .controles { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 12px; }
 .btn-pausa, .btn-fim {
   appearance: none; min-height: 76px; border-radius: 999px; font-weight: 800; font-size: 18px; letter-spacing: .03em; text-transform: uppercase;
@@ -315,9 +336,12 @@ body.est-aguardando .heroi.vel .num, body.est-fraco .heroi.vel .num { color: var
 .g-rotulo { fill: var(--muted); font-family: var(--f-num); font-size: 12px; font-weight: 500; }
 .g-rotulo-media { fill: var(--ink-2); }
 .g-area { fill: var(--area); stroke: none; }
+.g-area-alt { fill: rgba(19, 138, 148, 0.16); stroke: none; }
 .g-linha { fill: none; stroke: var(--laranja); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.g-linha-alt { fill: none; stroke: var(--azul); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
 .g-linha2 { fill: none; stroke: var(--azul); stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; }
 .g-ponto { fill: #fff; stroke: var(--laranja); stroke-width: 2; }
+.g-ponto-alt { fill: #fff; stroke: var(--azul); stroke-width: 2; }
 .g-ponto2 { fill: #fff; stroke: var(--azul); stroke-width: 2; }
 .g-media { stroke: var(--ink-2); stroke-width: 1; stroke-dasharray: 4 4; }
 .g-guia { stroke: var(--ink); stroke-width: 1; }
@@ -418,7 +442,7 @@ details.painel[open] > summary::after { content: "\2212"; }
 .grade2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 
 /* Diálogos */
-.dialogo { border: 0; border-radius: 22px; background: var(--surface); color: var(--ink); padding: 20px; width: min(440px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); box-shadow: 0 30px 60px -20px rgba(0, 0, 0, .45); }
+.dialogo { border: 0; border-radius: 22px; background: var(--surface); color: var(--ink); padding: 20px; width: min(440px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; box-shadow: 0 30px 60px -20px rgba(0, 0, 0, .45); }
 .dialogo::backdrop { background: rgba(20, 20, 26, .55); }
 .dialogo form { display: grid; gap: 14px; }
 .dialogo h2 { margin: 0; font-size: 22px; font-weight: 800; line-height: 1.15; }

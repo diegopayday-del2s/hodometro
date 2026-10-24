@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as F from '../js/formato.js';
-import { gerarGPX } from '../js/gpx.js';
+import { gerarGPX, lerGPX, converterGPXEmPedal } from '../js/gpx.js';
 
 test('formatos de tempo, distância e ritmo', () => {
   assert.equal(F.duracao(0), '00:00');
@@ -47,6 +47,32 @@ test('GPX válido, com tempo e quebra nos trechos sem sinal', () => {
   assert.match(xml, /<time>2026-10-23T10:00:10.000Z<\/time>/);
   assert.match(xml, /Pedal &amp; teste/);
   assert.doesNotMatch(xml, /<ele>null/);
+});
+
+test('importação e conversão de GPX para pedal', () => {
+  const pOriginal = {
+    inicio: Date.UTC(2026, 9, 24, 8, 0, 0),
+    pontos: [
+      [-23.5505, -46.6333, 0, 760],
+      [-23.5510, -46.6338, 10, 762],
+      [-23.5520, -46.6345, 25, 765],
+      [-23.5530, -46.6355, 45, 768]
+    ],
+    lacunas: []
+  };
+  const gpx = gerarGPX(pOriginal, 'Trilha da Serra');
+  const { nome, pontos } = lerGPX(gpx);
+  assert.equal(nome, 'Trilha da Serra');
+  assert.equal(pontos.length, 4);
+  assert.equal(pontos[0].alt, 760);
+
+  const pedal = converterGPXEmPedal(gpx);
+  assert.equal(pedal.nome, 'Trilha da Serra');
+  assert.equal(pedal.via, 'gps');
+  assert.equal(pedal.importado, 'gpx');
+  assert.ok(pedal.distancia > 200);
+  assert.ok(pedal.tempoMov > 0);
+  assert.ok(pedal.pontos.length >= 2);
 });
 
 test('estatísticas somam geral, mês e semana sem a demonstração', () => {
