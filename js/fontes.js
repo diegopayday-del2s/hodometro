@@ -1,5 +1,5 @@
 // De onde vêm as leituras: o GPS do navegador, o GPS nativo do Android
-// (continua com a tela apagada) ou um pedal simulado.
+// (chip GNSS, continua com a tela apagada) ou um pedal simulado.
 import { gerarPercurso, PEDAL_DEMO } from './simulador.js';
 import { chamar } from './nativo.js';
 
@@ -40,68 +40,96 @@ export class FonteGPS {
   }
 }
 
-function converterNativo(l) {
-  const agora = Date.now();
-  let t = l.time;
-  if (!Number.isFinite(t) || Math.abs(t - agora) > 30000) t = agora;
+/** Leitura do plugin Gravador (o horário já vem conferido pelo Android). */
+export function converterNativo(l) {
+  const num = v => (Number.isFinite(v) ? v : null);
   return {
-    t,
-    lat: l.latitude,
-    lon: l.longitude,
-    acc: l.accuracy,
-    alt: Number.isFinite(l.altitude) ? l.altitude : null,
-    altAcc: Number.isFinite(l.altitudeAccuracy) ? l.altitudeAccuracy : null,
-    vel: Number.isFinite(l.speed) && l.speed >= 0 ? l.speed : null,
-    rumo: Number.isFinite(l.bearing) && l.bearing >= 0 ? l.bearing : null,
+    t: Number.isFinite(l.t) ? l.t : Date.now(),
+    lat: l.lat,
+    lon: l.lon,
+    acc: num(l.acc) ?? 999,
+    alt: num(l.alt),
+    altAcc: num(l.altAcc),
+    vel: num(l.vel) != null && l.vel >= 0 ? l.vel : null,
+    rumo: num(l.rumo) != null && l.rumo >= 0 ? l.rumo : null,
   };
 }
 
 /**
- * GPS do app Android. Com `fundo: true` roda como serviço com notificação
- * ("Hodômetro gravando") e segue mandando leituras com a tela apagada.
+ * GPS do app Android, lido direto do chip (GNSS), sem Wi-Fi nem rede de celular.
+ *
+ * Sem `fundo`, só observa o sinal antes de sair. Com `fundo: true`, grava pelo
+ * serviço do Android: notificação na tela de bloqueio, trava de CPU e GPS ligado
+ * com a tela apagada. O serviço também guarda as leituras num arquivo; se o app
+ * fechar no meio do pedal, `perdidas(desde)` devolve o que ele gravou sozinho.
  */
 export class FonteNativa {
-  constructor() { this.id = null; this.pedindo = false; this.fundo = false; this.geracao = 0; this.simulada = false; }
-  get ativa() { return this.id != null || this.pedindo; }
+  constructor() {
+    this.simulada = false;
+    this.modo = null;          // 'observar' | 'gravar' | null
+    this.aoLer = null;
+    this.aoErrar = null;
+    this.aoSatelites = null;
+    this.geracao = 0;
+    this.ouvindo = null;
+  }
+  get ativa() { return this.modo != null; }
+  get gravando() { return this.modo === 'gravar'; }
   agora() { return Date.now(); }
-  iniciar(aoLer, aoErrar, { fundo = false } = {}) {
-    if (this.ativa && this.fundo === fundo) return;
-    this.parar();
-    this.fundo = fundo;
-    this.pedindo = true;
-    const geracao = ++this.geracao;
-    const opcoes = { requestPermissions: true, stale: false, distanceFilter: 0 };
-    if (fundo) {
-      opcoes.backgroundTitle = 'Hodômetro gravando';
-      opcoes.backgroundMessage = 'Gravando o seu pedal pelo GPS. Toque para abrir.';
+
+  #ouvir() {
+    if (!this.ouvindo) {
+      this.ouvindo = Promise.all([
+        chamar('Gravador', 'addListener', 'leitura', l => { if (this.modo && this.aoLer) this.aoLer(converterNativo(l)); }),
+        chamar('Gravador', 'addListener', 'satelites', s => { if (this.aoSatelites) this.aoSatelites(s); }),
+        chamar('Gravador', 'addListener', 'gps', g => {
+          if (!g.ligado && this.modo && this.aoErrar) this.aoErrar({ code: 2, tipo: 'GPS_DESLIGADO', message: 'A localização do celular foi desligada.' });
+        }),
+      ]).then(() => true).catch(e => { this.ouvindo = null; throw e; });
     }
-    chamar('BackgroundGeolocation', 'addWatcher', opcoes, (loc, erro) => {
-      if (geracao !== this.geracao) return;
-      if (erro) {
-        aoErrar({ code: erro.code === 'NOT_AUTHORIZED' ? 1 : 2, message: erro.message || String(erro) });
-        return;
-      }
-      if (loc) aoLer(converterNativo(loc));
-    })
-      .then(id => {
-        if (geracao !== this.geracao) { chamar('BackgroundGeolocation', 'removeWatcher', { id }).catch(() => {}); return; }
-        this.id = id;
-        this.pedindo = false;
-      })
+    return this.ouvindo;
+  }
+
+  /** opções: fundo (gravar), novo (pedal novo, apaga o arquivo anterior), titulo e texto da notificação, aoSatelites. */
+  iniciar(aoLer, aoErrar, { fundo = false, novo = false, titulo, texto, aoSatelites } = {}) {
+    this.aoLer = aoLer;
+    this.aoErrar = aoErrar;
+    if (aoSatelites) this.aoSatelites = aoSatelites;
+    if (this.modo === 'gravar' && !fundo) return;   // gravando não volta a só observar
+    this.modo = fundo ? 'gravar' : 'observar';
+    const geracao = ++this.geracao;
+    this.#ouvir()
+      .then(() => (fundo ? chamar('Gravador', 'iniciar', { novo, titulo, texto }) : chamar('Gravador', 'observar')))
       .catch(e => {
         if (geracao !== this.geracao) return;
-        this.pedindo = false;
-        aoErrar({ code: 2, message: (e && e.message) || String(e) });
+        this.modo = null;
+        const tipo = e && e.code;
+        aoErrar({ code: tipo === 'SEM_PERMISSAO' ? 1 : 2, tipo, message: (e && e.message) || String(e) });
       });
   }
+
   parar() {
+    const era = this.modo;
+    this.modo = null;
     this.geracao++;
-    const id = this.id;
-    this.id = null;
-    this.pedindo = false;
-    if (id) chamar('BackgroundGeolocation', 'removeWatcher', { id }).catch(() => {});
+    if (era === 'gravar') chamar('Gravador', 'parar').catch(() => {});
+    else if (era === 'observar') chamar('Gravador', 'pararObservar').catch(() => {});
   }
-  abrirAjustes() { return chamar('BackgroundGeolocation', 'openSettings').catch(() => {}); }
+
+  /** Leituras que o serviço gravou depois de `desde` (ms), com o app fechado ou em segundo plano. */
+  async perdidas(desde) {
+    const r = await chamar('Gravador', 'leituras', { desde: Math.floor(desde || 0) });
+    return ((r && r.leituras) || []).map(converterNativo);
+  }
+
+  /** Apaga o arquivo de leituras depois que o pedal foi salvo. */
+  limpar() { return chamar('Gravador', 'limpar').catch(() => {}); }
+
+  /** Números da notificação na tela de bloqueio. */
+  notificar(titulo, texto) { return chamar('Gravador', 'atualizar', { titulo, texto }).catch(() => {}); }
+
+  /** tipo: 'app', 'localizacao' ou 'notificacoes'. */
+  abrirAjustes(tipo = 'app') { return chamar('Gravador', 'abrirAjustes', { tipo }).catch(() => {}); }
 }
 
 /** Pedal de demonstração acelerado: `fator` segundos de pedal por segundo real. */
