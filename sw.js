@@ -1,6 +1,6 @@
 // Service worker: guarda o app no celular para abrir sem internet.
 // Ao mudar qualquer arquivo, suba a VERSAO para o celular baixar a nova.
-const VERSAO = '1.1.0';
+const VERSAO = '1.1.1';
 const CACHE = `hodometro-${VERSAO}`;
 const ARQUIVOS = [
   './',

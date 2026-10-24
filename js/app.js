@@ -8,7 +8,7 @@ import { falar, temVoz } from './voz.js';
 import { gerarGPX } from './gpx.js';
 import { desenharTrajeto, graficoVelocidade } from './desenho.js';
 
-export const VERSAO = '1.1.0';
+export const VERSAO = '1.1.1';
 
 // No app Android o GPS segue com a tela apagada; no navegador, não
 const NATIVO = ehNativo();
