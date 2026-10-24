@@ -2,6 +2,7 @@
   "appId": "io.github.diegopayday.hodometro",
   "appName": "Hodômetro",
   "webDir": "www",
+  "appendUserAgent": "Hodometro (+https://github.com/diegopayday-del2s/hodometro)",
   "android": {
     "useLegacyBridge": true,
     "backgroundColor": "#FFFFFF",

@@ -123,8 +123,9 @@ parecida (15%) e 85% de cada caminho fica a menos de 60 m do outro. Ida e volta
 são rotas diferentes. Durante o pedal, a comparação com o melhor tempo usa o
 tempo em movimento, sem as paradas.
 
-**Mapa:** os blocos do mapa vêm do CARTO (dados do OpenStreetMap) quando tem
-internet. É só o fundo: a gravação, as rotas e os números nunca dependem dele.
+**Mapa:** os blocos do mapa vêm do OpenStreetMap quando tem internet (o CARTO
+passou a exigir chave e devolvia blocos com a marca "API KEY REQUIRED"). É só o
+fundo: a gravação, as rotas e os números nunca dependem dele.
 Sem internet aparece o desenho do trajeto, como antes.
 
 Precisão nos testes com pedais simulados (tremido de 4 m, como um celular comum;

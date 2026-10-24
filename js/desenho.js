@@ -20,19 +20,23 @@ export function desenharTrajeto(canvas, pedal) {
   const tinta = cor(canvas, '--ink'), suave = cor(canvas, '--muted'), linha = cor(canvas, '--line');
   const rota = cor(canvas, '--accent'), fundo = cor(canvas, '--surface');
   ctx.font = '600 13px "Barlow", system-ui, sans-serif';
+  // Rota que está sendo seguida (opcional): linha de referência por baixo do trajeto
+  const guia = pedal.rota && pedal.rota.length >= 2 ? pedal.rota : null;
 
-  if (pts.length < 2) {
+  if (pts.length < 2 && !guia) {
     ctx.fillStyle = suave;
     ctx.textAlign = 'center';
     ctx.fillText(pedal.via === 'manual' ? 'Pedal lançado à mão, sem trajeto' : 'Sem trajeto gravado', w / 2, h / 2);
     return;
   }
 
-  const lat0 = pts[0][0], lon0 = pts[0][1];
+  const ref = pts.length ? pts[0] : guia[0];
+  const lat0 = ref[0], lon0 = ref[1];
   const ky = 111320, kx = ky * Math.cos(lat0 * Math.PI / 180);
   const xy = pts.map(p => [(p[1] - lon0) * kx, (p[0] - lat0) * ky]);
+  const xyGuia = guia ? guia.map(p => [(p[1] - lon0) * kx, (p[0] - lat0) * ky]) : [];
   let minx = Infinity, maxx = -Infinity, miny = Infinity, maxy = -Infinity;
-  for (const [x, y] of xy) { minx = Math.min(minx, x); maxx = Math.max(maxx, x); miny = Math.min(miny, y); maxy = Math.max(maxy, y); }
+  for (const [x, y] of [...xy, ...xyGuia]) { minx = Math.min(minx, x); maxx = Math.max(maxx, x); miny = Math.min(miny, y); maxy = Math.max(maxy, y); }
   const pad = 22;
   const larg = Math.max(maxx - minx, 30), alt = Math.max(maxy - miny, 30);
   const esc = Math.min((w - 2 * pad) / larg, (h - 2 * pad - 18) / alt);
@@ -47,9 +51,17 @@ export function desenharTrajeto(canvas, pedal) {
   for (let gy = Math.ceil(miny / passoGrade) * passoGrade; gy <= maxy; gy += passoGrade) { const [, sy] = tela([minx, gy]); ctx.moveTo(0, sy); ctx.lineTo(w, sy); }
   ctx.stroke();
 
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  if (xyGuia.length) {
+    ctx.strokeStyle = cor(canvas, '--azul'); ctx.globalAlpha = 0.45; ctx.lineWidth = 7;
+    ctx.beginPath();
+    xyGuia.forEach((p, i) => { const [sx, sy] = tela(p); if (i) ctx.lineTo(sx, sy); else ctx.moveTo(sx, sy); });
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
   // Trajeto; trechos sem sinal em tracejado
   const quebras = new Set((pedal.lacunas || []).map(l => l.i));
-  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   for (let i = 1; i < xy.length; i++) {
     const [ax, ay] = tela(xy[i - 1]), [bx, by] = tela(xy[i]);
     const semSinal = quebras.has(i);
@@ -66,8 +78,10 @@ export function desenharTrajeto(canvas, pedal) {
     ctx.fillStyle = preench; ctx.fill();
     ctx.lineWidth = 3; ctx.strokeStyle = borda; ctx.stroke();
   };
-  marca(xy[0], fundo, tinta);
-  marca(xy[xy.length - 1], rota, fundo);
+  if (xy.length) {
+    marca(xy[0], fundo, tinta);
+    marca(xy[xy.length - 1], rota, fundo);
+  }
 
   // Escala
   const alvo = w / 4;

@@ -72,8 +72,31 @@ export function converterGPXEmPedal(xmlTexto, id) {
 
   const fimT = Math.max(t0 + 1000, ultimoT);
   const pedal = r.finalizar(fimT);
-  pedal.id = id || ('gpx_' + Math.round(t0).toString(36) + Math.random().toString(36).slice(2, 6));
+  // Id tirado do próprio arquivo: importar o mesmo GPX de novo dá o mesmo id
+  pedal.id = id || ('gpx_' + resumo(xmlTexto));
   pedal.nome = nome;
   pedal.importado = 'gpx';
   return pedal;
+}
+
+/** Hash curto e estável de um texto (FNV-1a de 32 bits, em base 36). */
+function resumo(texto) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < texto.length; i++) {
+    h ^= texto.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(36);
+}
+
+/**
+ * Pedal que já está no app: mesmo id, ou mesmo pedal vindo por outro caminho
+ * (GPX exportado daqui, ou o mesmo pedal gravado aqui e no Strava): começa
+ * até 2 min de diferença e a distância não passa de 5% de diferença.
+ */
+export function pedalRepetido(novo, pedais) {
+  return pedais.find(p => p.id === novo.id || (
+    Math.abs(p.inicio - novo.inicio) <= 120000 &&
+    Math.abs(p.distancia - novo.distancia) <= Math.max(50, 0.05 * Math.max(p.distancia, novo.distancia))
+  )) || null;
 }

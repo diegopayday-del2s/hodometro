@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as F from '../js/formato.js';
-import { gerarGPX, lerGPX, converterGPXEmPedal } from '../js/gpx.js';
+import { gerarGPX, lerGPX, converterGPXEmPedal, pedalRepetido } from '../js/gpx.js';
 
 test('formatos de tempo, distância e ritmo', () => {
   assert.equal(F.duracao(0), '00:00');
@@ -73,6 +73,29 @@ test('importação e conversão de GPX para pedal', () => {
   assert.ok(pedal.distancia > 200);
   assert.ok(pedal.tempoMov > 0);
   assert.ok(pedal.pontos.length >= 2);
+});
+
+test('o mesmo GPX importado duas vezes não vira dois pedais', () => {
+  const original = {
+    id: 'p1',
+    inicio: Date.UTC(2026, 9, 24, 8, 0, 0),
+    pontos: [
+      [-23.5505, -46.6333, 0, 760],
+      [-23.5510, -46.6338, 10, 762],
+      [-23.5520, -46.6345, 25, 765],
+      [-23.5530, -46.6355, 45, 768]
+    ],
+    lacunas: []
+  };
+  const gpx = gerarGPX(original, 'Volta');
+  const a = converterGPXEmPedal(gpx), b = converterGPXEmPedal(gpx);
+  assert.equal(a.id, b.id);
+  assert.ok(pedalRepetido(b, [a]));
+  // GPX exportado daqui volta para o app: é o pedal que já existe
+  assert.ok(pedalRepetido(a, [{ ...original, distancia: a.distancia }]));
+  // Outro pedal no mesmo dia não conta como repetido
+  assert.equal(pedalRepetido(a, [{ id: 'p2', inicio: original.inicio + 3600e3, distancia: a.distancia }]), null);
+  assert.equal(pedalRepetido(a, [{ id: 'p3', inicio: original.inicio, distancia: a.distancia * 3 }]), null);
 });
 
 test('estatísticas somam geral, mês e semana sem a demonstração', () => {

@@ -77,7 +77,7 @@ js/graficos.js        gráfico de progresso, horas de atividade, anel de meta
 js/progresso.js       progresso e metas (puro, testado)
 js/rotas.js           rotas e GuiaRota (puro, testado)
 js/rastreador.js      motor do pedal (puro, testado)
-js/mapa.js            blocos do mapa CARTO atrás do trajeto
+js/mapa.js            blocos do mapa OpenStreetMap atrás do trajeto
 js/story.js           imagem dos stories
 js/desenho.js         desenho do trajeto sem mapa e gráfico de velocidade
 js/formato.js         números, datas e textos em português

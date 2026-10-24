@@ -2,11 +2,14 @@
 // Só aparece com internet. Sem ela, ou se algum bloco não carregar, a função
 // devolve false e fica o desenho de sempre (desenho.js).
 // A gravação do pedal nunca depende disto.
+// Regras de uso dos blocos (operations.osmfoundation.org/policies/tiles):
+// atribuição visível, cada bloco pedido uma vez só (o Map `blocos` guarda) e o
+// app se identifica (appendUserAgent em capacitor.config.json).
 
 const TAM = 256;
 const ZOOM_MAX = 17;
 const ESPERA = 6000;   // ms para os blocos chegarem
-const ATRIBUICAO = '© OpenStreetMap';
+const ATRIBUICAO = '© colaboradores do OpenStreetMap';
 const url = (z, x, y) => `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
 
 const px = (lon, z) => (lon + 180) / 360 * TAM * 2 ** z;
@@ -86,13 +89,15 @@ async function pintarBlocos(canvas, z, cx, cy, esc, tela, depois, vale = () => t
  * lacunas: índices onde começa um trecho sem sinal (tracejado).
  * Devolve true se desenhou com mapa.
  */
-export async function trajetoNoMapa(canvas, pontos, { lacunas = [], cor = '#fc5200', margem = 28 } = {}) {
+export async function trajetoNoMapa(canvas, pontos, { lacunas = [], cor = '#fc5200', margem = 28, rota = null } = {}) {
   if (!podeUsarMapa() || !pontos || pontos.length < 2) return false;
   const tela = preparar(canvas);
   if (!tela) return false;
   const marca = (canvas.dataset.mapa = String(Math.random()));
+  // rota: linha da rota que está sendo seguida, desenhada por baixo do trajeto
+  const guia = rota && rota.length >= 2 ? rota : [];
   let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
-  for (const p of pontos) { minLat = Math.min(minLat, p[0]); maxLat = Math.max(maxLat, p[0]); minLon = Math.min(minLon, p[1]); maxLon = Math.max(maxLon, p[1]); }
+  for (const p of [...pontos, ...guia]) { minLat = Math.min(minLat, p[0]); maxLat = Math.max(maxLat, p[0]); minLon = Math.min(minLon, p[1]); maxLon = Math.max(maxLon, p[1]); }
   const larg0 = Math.max(px(maxLon, 0) - px(minLon, 0), 1e-7), alt0 = Math.max(py(minLat, 0) - py(maxLat, 0), 1e-7);
   const zFit = Math.log2(Math.min((tela.w - 2 * margem) / larg0, (tela.h - 2 * margem) / alt0));
   const zReal = Math.max(2, Math.min(ZOOM_MAX, zFit));
@@ -112,6 +117,12 @@ export async function trajetoNoMapa(canvas, pontos, { lacunas = [], cor = '#fc52
         }
         ctx.setLineDash([]);
       };
+      if (guia.length) {
+        ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+        ctx.beginPath();
+        guia.forEach((p, i) => { const [x, y] = xy(p[0], p[1]); if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
+        ctx.lineWidth = 8; ctx.strokeStyle = 'rgba(19,138,148,.5)'; ctx.stroke();
+      }
       linha(8, 'rgba(255,255,255,.95)', false);
       linha(4.5, cor, false);
       linha(3, 'rgba(90,90,100,.8)', true);

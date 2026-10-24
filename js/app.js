@@ -6,7 +6,7 @@ import { FonteGPS, FonteSimulada, FonteNativa } from './fontes.js';
 import { ehNativo, chamar } from './nativo.js';
 import { falar, temVoz } from './voz.js';
 import { vibrar, temVibracao } from './vibra.js';
-import { gerarGPX, converterGPXEmPedal } from './gpx.js';
+import { gerarGPX, converterGPXEmPedal, pedalRepetido } from './gpx.js';
 import { desenharTrajeto, graficoVelocidade, graficoElevacao } from './desenho.js';
 import { trajetoNoMapa, posicaoNoMapa } from './mapa.js';
 import { desenharStory, pngBase64 } from './story.js';
@@ -16,7 +16,7 @@ import { graficoProgresso, histogramaHoras, anel } from './graficos.js';
 import { $, $$, h, icone, aviso, confirmar, pedirTexto, segurarPara, quandoAparecer } from './ui.js';
 import { NOME_APP } from './marca.js';
 
-export const VERSAO = '1.3.1';
+export const VERSAO = '1.3.2';
 
 // No app Android o GPS vem do chip e segue com a tela apagada; no navegador, não
 const NATIVO = ehNativo();
@@ -762,15 +762,18 @@ function renderMapaAoVivo(forcar = false) {
   S.ultimoMapaAoVivo = agora;
 
   const pts = S.r.pontos;
+  // Rota escolhida no Gravar, por baixo do trajeto (só no pedal de verdade, com guia)
+  const rota = S.guia && S.guia.rota ? S.guia.rota.linha : null;
   if (!pts || pts.length < 2) {
-    if (S.ultimaLeitura) {
+    if (rota) desenharTrajeto(canvas, { pontos: [], rota });
+    else if (S.ultimaLeitura) {
       posicaoNoMapa(canvas, S.ultimaLeitura.lat, S.ultimaLeitura.lon, S.ultimaLeitura.acc);
     }
     return;
   }
-  desenharTrajeto(canvas, { pontos: pts, lacunas: S.r.lacunas });
+  desenharTrajeto(canvas, { pontos: pts, lacunas: S.r.lacunas, rota });
   if (S.cfg.mapa) {
-    trajetoNoMapa(canvas, pts, { lacunas: (S.r.lacunas || []).map(l => l.i) });
+    trajetoNoMapa(canvas, pts, { lacunas: (S.r.lacunas || []).map(l => l.i), rota });
   }
 }
 
@@ -1547,11 +1550,12 @@ function ligarEventos() {
     const files = Array.from(e.target.files || []);
     e.target.value = '';
     if (!files.length) return;
-    let importados = 0;
+    let importados = 0, repetidos = 0;
     for (const arq of files) {
       try {
         const texto = await arq.text();
         const pedal = converterGPXEmPedal(texto);
+        if (pedalRepetido(pedal, S.pedais)) { repetidos++; continue; }
         await A.salvarPedal(pedal);
         S.pedais.push(pedal);
         importados++;
@@ -1559,12 +1563,15 @@ function ligarEventos() {
         console.warn('Erro ao importar GPX:', arq.name, err);
       }
     }
+    const jaTinha = repetidos ? ` ${plural(repetidos, 'pedal já estava', 'pedais já estavam')} no app.` : '';
     if (importados > 0) {
       atualizarRotas();
-      aviso(`${importados} ${plural(importados, 'pedal importado', 'pedais importados')} do Strava!`);
+      aviso(`${plural(importados, 'pedal importado', 'pedais importados')}.${jaTinha}`);
       render();
+    } else if (repetidos) {
+      aviso(`Nada novo para importar.${jaTinha}`);
     } else {
-      aviso('Não foi possível importar os pedais desse arquivo GPX.');
+      aviso('Não consegui ler esse arquivo. Escolha um GPX com o trajeto do pedal.');
     }
   });
   $('#btnApagarTudo').addEventListener('click', async () => {
