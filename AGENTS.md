@@ -29,12 +29,27 @@ puro, sem build e sem dependências. Os dados ficam no IndexedDB do celular.
    tema claro e o escuro. Números com a fonte do LCD (`--f-lcd`).
 9. **Sem dados pessoais no repositório.** Nada de endereço, rota real ou backup de pedal.
 
+## App Android (Capacitor 7)
+
+- O app web fica na raiz. `npm run web` copia os arquivos listados em `sw.js`
+  para `www/`, que vai dentro do APK. Arquivo novo do app entra nessa lista.
+- `js/nativo.js` chama os plugins nativos. Use sempre `chamar(plugin, metodo, ...)`:
+  nunca devolva o objeto do plugin numa Promise (ele responde a `then` e quebra).
+- GPS com a tela apagada: `FonteNativa` em `js/fontes.js`, plugin
+  `@capacitor-community/background-geolocation`. `fundo: true` liga a notificação.
+- `android/` é gerado pelo Capacitor e versionado. Depois de mudar plugins:
+  `npm run android:sync`.
+- Nunca grave a senha da assinatura em arquivo. Ela fica só no segredo
+  `ANDROID_KEYSTORE_PASSWORD` do GitHub.
+
 ## Comandos
 
 ```
 npm test            testes
 npm run precisao    relatório de precisão
 npm start           servidor local em http://localhost:8080
+npm run android:sync   copia o app para o projeto Android
+npm run android:abrir  abre no Android Studio
 ```
 
 ## Mapa rápido do código

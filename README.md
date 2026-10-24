@@ -8,6 +8,29 @@ parciais por km e subida. Funciona sem internet depois de instalado.
 inicial e depois roda como app, offline. Não tem servidor nem conta: os pedais
 ficam guardados no próprio celular.
 
+## App Android (grava com a tela apagada)
+
+Esta é a versão recomendada. Grava com a tela bloqueada e o celular no bolso.
+Enquanto grava, aparece a notificação "Hodômetro gravando".
+
+**Instalar ou atualizar:**
+1. No celular, abra https://github.com/diegopayday-del2s/hodometro/releases/latest
+2. Toque em `Hodometro.apk`. Se o Chrome pedir, permita instalar apps desta fonte.
+3. Abra o Hodômetro. Permita a localização ("Durante o uso do app") e as notificações.
+4. Em Configurações > Apps > Hodômetro > Bateria, escolha "Sem restrições".
+   Sem isso, alguns celulares fecham o app no meio do pedal.
+
+Atualizações instalam por cima da versão anterior sem apagar os pedais, porque
+todas saem com a mesma assinatura.
+
+**Como o APK é feito:** a cada mudança na branch `main`, o GitHub Actions
+(`.github/workflows/android.yml`) roda os testes, monta o app e publica o APK na
+página de versões. Para assinar, ele usa a chave `android/app/hodometro.keystore`
+com a senha guardada no segredo `ANDROID_KEYSTORE_PASSWORD` do repositório.
+Guarde essa senha num lugar seguro: sem ela, uma versão nova não instala por cima.
+
+## Versão web (PWA)
+
 ## Instalar no celular
 
 1. Abra o endereço do app no celular (o do GitHub Pages, veja "Publicar" abaixo).
@@ -70,7 +93,27 @@ cada, com e sem perda de 20% das leituras). Para ver a tabela completa: `npm run
 - **Dados:** ficam só no navegador do celular. Desinstalar o app ou limpar os
   dados do site apaga os pedais. Use o backup.
 
-## Desenvolver e polir no Antigravity
+## Desenvolver e polir no Antigravity (Windows)
+
+Programas: [Git](https://git-scm.com/download/win), [Node.js 22 LTS](https://nodejs.org)
+e, só se quiser testar ligado no celular por cabo, o [Android Studio](https://developer.android.com/studio).
+
+1. No terminal (PowerShell):
+   `git clone https://github.com/diegopayday-del2s/hodometro.git C:\Projetos\hodometro`
+2. No Antigravity: File > Open Folder > `C:\Projetos\hodometro`. Essa é a pasta raiz.
+3. No terminal do Antigravity: `npm install` e `npm test`.
+4. Peça as mudanças ao agente. Ele deve ler o `AGENTS.md` primeiro.
+5. Para gerar um APK novo, basta enviar para o GitHub (`git push`): o Actions publica sozinho.
+
+Testar no celular pelo cabo, com Android Studio:
+1. No celular: Configurações > Sobre o telefone > toque 7 vezes em "Número da versão".
+   Depois, em Opções do desenvolvedor, ligue "Depuração USB".
+2. No Antigravity: `npm run android:abrir`. O Android Studio abre o projeto `android/`.
+3. Espere o Gradle terminar, escolha o celular na barra de cima e toque em Run (▶).
+4. O app instalado pelo Android Studio tem outra assinatura. Antes, faça backup
+   no app e desinstale a versão do GitHub. Para voltar, faça o inverso.
+
+
 
 Não tem build nem dependência: é HTML, CSS e JavaScript puro (módulos ES).
 
@@ -126,9 +169,6 @@ exportação GPX e recuperação do pedal se o app fechar no meio.
 
 Próximos passos possíveis:
 
-- **App nativo com GPS em segundo plano** (Capacitor + plugin de geolocalização
-  em background): grava com a tela apagada, como Strava. O motor `js/rastreador.js`
-  pode ser reaproveitado sem mudança.
 - **Sensor de cadência ou de batimento por Bluetooth** (Web Bluetooth no Chrome
   do Android): contaria as pedaladas por minuto.
 - **Mapa com fundo offline** (tiles baixados antes) e navegação por rota.
