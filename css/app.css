@@ -142,7 +142,8 @@ body.gravando .app { padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px
 @keyframes pisca { 50% { opacity: .2; } }
 .parcial { margin: 0; font-family: var(--f-lcd); font-size: 16px; color: var(--ink-2); text-align: center; }
 .controles { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 10px; }
-.aviso-tela { border: 1.5px solid var(--alerta); border-radius: 12px; padding: 10px 12px; font-size: 14px; color: var(--ink); }
+.aviso-tela { border: 1.5px solid var(--alerta); border-radius: 12px; padding: 10px 12px; font-size: 14px; color: var(--ink); margin: 0; }
+.aviso-tela.neutro { border-color: var(--line); color: var(--ink-2); }
 
 /* Semana */
 .meta { display: grid; gap: 6px; }

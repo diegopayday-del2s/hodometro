@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Hodômetro</string>
+    <string name="title_activity_main">Hodômetro</string>
+    <string name="package_name">io.github.diegopayday.hodometro</string>
+    <string name="custom_url_scheme">io.github.diegopayday.hodometro</string>
+    <!-- Notificação que mantém o GPS ligado com a tela apagada -->
+    <string name="capacitor_background_geolocation_notification_channel_name">Gravação do pedal</string>
+    <string name="capacitor_background_geolocation_notification_icon">drawable/ic_pedal</string>
+    <string name="capacitor_background_geolocation_notification_color">#D23C26</string>
+</resources>

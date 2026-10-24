@@ -2,12 +2,16 @@
 import { Rastreador } from './rastreador.js';
 import * as F from './formato.js';
 import * as A from './armazem.js';
-import { FonteGPS, FonteSimulada } from './fontes.js';
+import { FonteGPS, FonteSimulada, FonteNativa } from './fontes.js';
+import { ehNativo, chamar } from './nativo.js';
 import { falar, temVoz } from './voz.js';
 import { gerarGPX } from './gpx.js';
 import { desenharTrajeto, graficoVelocidade } from './desenho.js';
 
-export const VERSAO = '1.0.0';
+export const VERSAO = '1.1.0';
+
+// No app Android o GPS segue com a tela apagada; no navegador, não
+const NATIVO = ehNativo();
 
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -28,7 +32,7 @@ function h(tag, attrs, ...filhos) {
 }
 
 // ---------- ajustes ----------
-const CFG_PADRAO = { autoPausa: true, telaLigada: true, precisao: 25, voz: 1, vozPausa: false, meta: 0 };
+const CFG_PADRAO = { autoPausa: true, telaLigada: !NATIVO, precisao: 25, voz: 1, vozPausa: false, meta: 0 };
 function lerCfg() {
   try { return { ...CFG_PADRAO, ...JSON.parse(localStorage.getItem('hodometro.cfg') || '{}') }; }
   catch { return { ...CFG_PADRAO }; }
@@ -51,7 +55,7 @@ const S = {
   semSel: null,
   salvoEm: 0,
 };
-const gps = new FonteGPS();
+const gps = NATIVO ? new FonteNativa() : new FonteGPS();
 
 // ---------- utilidades de tela ----------
 let toastT = 0;
@@ -101,10 +105,10 @@ async function permissaoGps() {
   try { return (await navigator.permissions.query({ name: 'geolocation' })).state; } catch { return 'prompt'; }
 }
 
-function ligarGPS() {
-  if (gps.ativa) return;
-  if (S.gps.estado === 'desligado' || S.gps.estado === 'negado' || S.gps.estado === 'indisponivel') S.gps.estado = 'procurando';
-  gps.iniciar(aoLerGps, aoErroGps);
+/** `fundo`: no app Android, segue gravando com a tela apagada (com notificação). */
+function ligarGPS(fundo = false) {
+  if (!gps.ativa && ['desligado', 'negado', 'indisponivel'].includes(S.gps.estado)) S.gps.estado = 'procurando';
+  gps.iniciar(aoLerGps, aoErroGps, { fundo });
   renderGps();
 }
 function desligarGPS() {
@@ -115,6 +119,7 @@ function desligarGPS() {
 }
 function aoLerGps(f) {
   S.ultimaLeitura = f;
+  if (!S.gpsLiberado) { S.gpsLiberado = true; try { localStorage.setItem('hodometro.gpsLiberado', '1'); } catch { /* ok */ } }
   S.gps.acc = f.acc;
   S.gps.estado = f.acc <= S.cfg.precisao ? 'pronto' : 'fraco';
   if (S.r && !S.demo) processar(f);
@@ -126,12 +131,23 @@ function aoErroGps(e) {
   else if (e.code === 0) { S.gps.estado = 'indisponivel'; gps.parar(); }
   // code 3 (demorou) não é erro: o GPS continua tentando
   renderGps();
-  if (S.r && !S.demo && e.code === 1) aviso('A localização foi bloqueada. Libere nas configurações do navegador para continuar gravando.');
+  if (S.r && !S.demo && e.code === 1) aviso(NATIVO ? 'A localização foi bloqueada. Libere para o Hodômetro nas configurações do Android.' : 'A localização foi bloqueada. Libere nas configurações do navegador para continuar gravando.');
 }
 
 async function aquecerGPS() {
   if (S.r || document.hidden || S.tela !== 'pedalar') return;
-  if (await permissaoGps() === 'granted') ligarGPS();
+  let liberado = false;
+  if (NATIVO) { try { liberado = localStorage.getItem('hodometro.gpsLiberado') === '1'; } catch { /* ok */ } }
+  else liberado = await permissaoGps() === 'granted';
+  if (liberado) ligarGPS(false);
+}
+
+/** Android 13+: a notificação "Hodômetro gravando" precisa de permissão. */
+async function pedirNotificacao() {
+  try {
+    const st = await chamar('LocalNotifications', 'checkPermissions');
+    if (st.display !== 'granted') await chamar('LocalNotifications', 'requestPermissions');
+  } catch { /* sem a notificação o serviço ainda grava */ }
 }
 
 // ---------- gravação ----------
@@ -147,6 +163,8 @@ function processar(f) {
   if (!S.r) return;
   tratarEventos(S.r.push(f));
   agendarPainel();
+  // Com a tela apagada o relógio da página fica lento; salva também por leitura
+  if (!S.demo && Date.now() - S.salvoEm > 15000) salvarAtivo();
 }
 
 function tratarEventos(evs) {
@@ -183,7 +201,7 @@ async function salvarAtivo() {
 }
 
 async function manterTela() {
-  if (!S.cfg.telaLigada || !S.r) return;
+  if (NATIVO || !S.cfg.telaLigada || !S.r) return;
   if (!('wakeLock' in navigator)) { S.wakeFalhou = true; renderPainel(); return; }
   try {
     S.wake = await navigator.wakeLock.request('screen');
@@ -197,15 +215,20 @@ function liberarTela() {
   S.wake = null;
 }
 
-function comecar(demo = false) {
-  if (S.r) return;
+async function comecar(demo = false) {
+  if (S.r || S.iniciando) return;
+  if (!demo && NATIVO) {
+    S.iniciando = true;
+    try { await pedirNotificacao(); } finally { S.iniciando = false; }
+    if (S.r) return;
+  }
   S.demo = demo;
   S.demoAvisou = false;
   S.fonte = demo ? new FonteSimulada(20) : gps;
   S.r = new Rastreador({ autoPausa: S.cfg.autoPausa, precisaoMax: S.cfg.precisao }, S.fonte.agora());
   if (demo) S.fonte.iniciar(processar);
   else {
-    ligarGPS();
+    ligarGPS(true);
     // Aproveita a leitura do aquecimento se for de agora há pouco
     const f = S.ultimaLeitura;
     if (f && S.r.inicio - f.t < 1500) processar(f);
@@ -282,14 +305,14 @@ function renderGps() {
     procurando: ['Procurando sinal…', 'Fique num lugar aberto. Leva de 5 a 30 segundos.'],
     pronto: ['GPS pronto', `Precisão de ${Math.round(g.acc || 0)} m.`],
     fraco: ['Sinal fraco', `Precisão de ${Math.round(g.acc || 0)} m. Vale esperar um pouco num lugar aberto.`],
-    negado: ['Localização bloqueada', 'Libere a localização para este site nas configurações do navegador.'],
+    negado: ['Localização bloqueada', NATIVO ? 'Toque em Abrir ajustes e libere a localização do Hodômetro.' : 'Libere a localização para este site nas configurações do navegador.'],
     indisponivel: ['GPS indisponível', 'Confira se a localização do celular está ligada.'],
   };
   const [titulo, sub] = textos[g.estado] || textos.desligado;
   $('#gpsTitulo').textContent = titulo;
   $('#gpsSub').textContent = sub;
   $('#btnGps').hidden = !['desligado', 'negado', 'indisponivel'].includes(g.estado);
-  $('#btnGps').textContent = g.estado === 'desligado' ? 'Ativar GPS' : 'Tentar de novo';
+  $('#btnGps').textContent = g.estado === 'desligado' ? 'Ativar GPS' : NATIVO && g.estado === 'negado' ? 'Abrir ajustes' : 'Tentar de novo';
   $('#dicaComecar').textContent = g.estado === 'pronto' ? ''
     : 'Pode começar já. A gravação só conta a partir de um sinal bom.';
 }
@@ -345,7 +368,7 @@ function renderInstalar() {
   let fechado = false;
   try { fechado = localStorage.getItem('hodometro.instalarFechado') === '1'; } catch { /* sem acesso */ }
   const caixa = $('#instalar');
-  caixa.hidden = instalado || fechado;
+  caixa.hidden = NATIVO || instalado || fechado;
   if (caixa.hidden) return;
   const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
   $('#btnInstalar').hidden = !S.instalar;
@@ -386,7 +409,11 @@ function renderPainel() {
   $('#btnPausar').textContent = p.estado === 'pausado' ? 'Continuar' : 'Pausar';
 
   const avisoTela = $('#avisoTela');
-  if (S.cfg.telaLigada && S.wakeFalhou && !S.demo) {
+  avisoTela.classList.toggle('neutro', NATIVO);
+  if (NATIVO && !S.demo) {
+    avisoTela.hidden = false;
+    avisoTela.textContent = 'Pode bloquear a tela e guardar o celular. Enquanto grava, fica a notificação "Hodômetro gravando".';
+  } else if (S.cfg.telaLigada && S.wakeFalhou && !S.demo) {
     avisoTela.hidden = false;
     avisoTela.textContent = 'Este navegador não deixou manter a tela ligada. Aumente o tempo de tela do celular, senão o GPS para quando ela apagar.';
   } else if (!S.cfg.telaLigada && !S.demo) {
@@ -460,7 +487,10 @@ function renderAjustes() {
   if (document.activeElement !== $('#cfgMeta')) $('#cfgMeta').value = S.cfg.meta ? String(S.cfg.meta).replace('.', ',') : '';
   $('#btnTestarVoz').hidden = !temVoz();
   $('#btnDemo').disabled = !!S.r;
-  $('#versao').textContent = `Versão ${VERSAO}. Funciona offline depois de aberto uma vez.`;
+  $('#linhaTela').hidden = NATIVO;
+  $('#blocoBateria').hidden = !NATIVO;
+  if (NATIVO) $('#txtTela').textContent = 'Tela bloqueada: no app Android o GPS continua gravando com a tela apagada e o celular no bolso. Enquanto grava, fica a notificação "Hodômetro gravando".';
+  $('#versao').textContent = NATIVO ? `Versão ${VERSAO} do app Android. Funciona sem internet.` : `Versão ${VERSAO}. Funciona offline depois de aberto uma vez.`;
 }
 
 // ---------- detalhe ----------
@@ -540,31 +570,51 @@ function fecharDetalhe() {
   render();
 }
 
-function baixar(blob, nome) {
+/**
+ * Entrega um arquivo de texto ao usuário. No app Android abre o menu de
+ * compartilhar (salvar no Drive, mandar no WhatsApp, abrir no Strava).
+ * No navegador, tenta compartilhar e, se não der, baixa.
+ */
+async function entregarArquivo(texto, nome, tipo) {
+  if (NATIVO) {
+    try {
+      const { uri } = await chamar('Filesystem', 'writeFile', { path: nome, data: texto, directory: 'CACHE', encoding: 'utf8' });
+      await chamar('Share', 'share', { title: nome, files: [uri], dialogTitle: 'Salvar ou enviar' });
+      return 'compartilhado';
+    } catch (e) {
+      if (/cancel/i.test(String(e && e.message))) return 'cancelado';
+      aviso('Não consegui gerar o arquivo. Tente de novo.');
+      return 'erro';
+    }
+  }
+  const blob = new Blob([texto], { type: tipo });
+  try {
+    const file = new File([blob], nome, { type: tipo });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: nome }); return 'compartilhado'; }
+  } catch (e) { if (e && e.name === 'AbortError') return 'cancelado'; }
   const url = URL.createObjectURL(blob);
   const a = h('a', { href: url, download: nome });
   document.body.append(a);
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10000);
+  return 'baixado';
 }
 
 async function exportarGPX(p) {
   const nome = `${tituloPedal(p)} ${F.diaMes(new Date(p.inicio))}`;
   const arquivo = `pedal-${F.chaveDia(p.inicio)}-${F.hora(p.inicio).replace(':', 'h')}.gpx`;
-  const blob = new Blob([gerarGPX(p, nome)], { type: 'application/gpx+xml' });
-  try {
-    const file = new File([blob], arquivo, { type: 'application/gpx+xml' });
-    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: nome }); return; }
-  } catch (e) { if (e && e.name === 'AbortError') return; }
-  baixar(blob, arquivo);
-  aviso('GPX salvo em Downloads. No Strava, use "Enviar atividade" para importar.');
+  const r = await entregarArquivo(gerarGPX(p, nome), arquivo, 'application/gpx+xml');
+  if (r === 'baixado') aviso('GPX salvo em Downloads. No Strava, use "Enviar atividade" para importar.');
 }
 
 // ---------- eventos ----------
 function ligarEventos() {
   $$('#abas button').forEach(b => b.addEventListener('click', () => mostrarTela(b.dataset.tela)));
-  $('#btnGps').addEventListener('click', () => { S.gps.estado = 'procurando'; gps.parar(); ligarGPS(); });
+  $('#btnGps').addEventListener('click', () => {
+    if (NATIVO && S.gps.estado === 'negado') { gps.abrirAjustes(); return; }
+    S.gps.estado = 'procurando'; gps.parar(); ligarGPS(false);
+  });
   $('#btnComecar').addEventListener('click', () => comecar(false));
   $('#btnPausar').addEventListener('click', () => {
     if (!S.r) return;
@@ -633,10 +683,10 @@ function ligarEventos() {
   });
   $('#btnDemo').addEventListener('click', () => comecar(true));
 
-  $('#btnBackup').addEventListener('click', () => {
+  $('#btnBackup').addEventListener('click', async () => {
     const dados = { app: 'hodometro', versao: 1, exportadoEm: new Date().toISOString(), ajustes: S.cfg, pedais: S.pedais };
-    baixar(new Blob([JSON.stringify(dados)], { type: 'application/json' }), `hodometro-backup-${F.chaveDia(Date.now())}.json`);
-    aviso('Backup salvo em Downloads.');
+    const r = await entregarArquivo(JSON.stringify(dados), `hodometro-backup-${F.chaveDia(Date.now())}.json`, 'application/json');
+    if (r === 'baixado') aviso('Backup salvo em Downloads.');
   });
   $('#arqBackup').addEventListener('change', async e => {
     const arq = e.target.files && e.target.files[0];
@@ -694,7 +744,8 @@ function ligarEventos() {
 
 // ---------- atualização do app (service worker) ----------
 function registrarSW() {
-  if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
+  // No app Android os arquivos já estão no celular; o service worker é só para a versão web
+  if (NATIVO || !('serviceWorker' in navigator) || location.protocol === 'file:') return;
   navigator.serviceWorker.register('./sw.js').then(reg => {
     const oferecer = () => {
       if (!reg.waiting) return;
@@ -725,7 +776,7 @@ async function iniciar() {
       S.r = Rastreador.deJSON(ativo.r);
       S.fonte = gps;
       S.demo = false;
-      ligarGPS();
+      ligarGPS(true);
       iniciarRelogio();
       manterTela();
       aviso('Pedal em andamento recuperado. O trecho com o app fechado entra em linha reta.', null, null, 7000);

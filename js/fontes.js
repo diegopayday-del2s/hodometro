@@ -1,5 +1,7 @@
-// De onde vêm as leituras: o GPS do celular ou um pedal simulado.
+// De onde vêm as leituras: o GPS do navegador, o GPS nativo do Android
+// (continua com a tela apagada) ou um pedal simulado.
 import { gerarPercurso, PEDAL_DEMO } from './simulador.js';
+import { chamar } from './nativo.js';
 
 function converter(pos) {
   const c = pos.coords;
@@ -36,6 +38,70 @@ export class FonteGPS {
     if (this.id != null) navigator.geolocation.clearWatch(this.id);
     this.id = null;
   }
+}
+
+function converterNativo(l) {
+  const agora = Date.now();
+  let t = l.time;
+  if (!Number.isFinite(t) || Math.abs(t - agora) > 30000) t = agora;
+  return {
+    t,
+    lat: l.latitude,
+    lon: l.longitude,
+    acc: l.accuracy,
+    alt: Number.isFinite(l.altitude) ? l.altitude : null,
+    altAcc: Number.isFinite(l.altitudeAccuracy) ? l.altitudeAccuracy : null,
+    vel: Number.isFinite(l.speed) && l.speed >= 0 ? l.speed : null,
+    rumo: Number.isFinite(l.bearing) && l.bearing >= 0 ? l.bearing : null,
+  };
+}
+
+/**
+ * GPS do app Android. Com `fundo: true` roda como serviço com notificação
+ * ("Hodômetro gravando") e segue mandando leituras com a tela apagada.
+ */
+export class FonteNativa {
+  constructor() { this.id = null; this.pedindo = false; this.fundo = false; this.geracao = 0; this.simulada = false; }
+  get ativa() { return this.id != null || this.pedindo; }
+  agora() { return Date.now(); }
+  iniciar(aoLer, aoErrar, { fundo = false } = {}) {
+    if (this.ativa && this.fundo === fundo) return;
+    this.parar();
+    this.fundo = fundo;
+    this.pedindo = true;
+    const geracao = ++this.geracao;
+    const opcoes = { requestPermissions: true, stale: false, distanceFilter: 0 };
+    if (fundo) {
+      opcoes.backgroundTitle = 'Hodômetro gravando';
+      opcoes.backgroundMessage = 'Gravando o seu pedal pelo GPS. Toque para abrir.';
+    }
+    chamar('BackgroundGeolocation', 'addWatcher', opcoes, (loc, erro) => {
+      if (geracao !== this.geracao) return;
+      if (erro) {
+        aoErrar({ code: erro.code === 'NOT_AUTHORIZED' ? 1 : 2, message: erro.message || String(erro) });
+        return;
+      }
+      if (loc) aoLer(converterNativo(loc));
+    })
+      .then(id => {
+        if (geracao !== this.geracao) { chamar('BackgroundGeolocation', 'removeWatcher', { id }).catch(() => {}); return; }
+        this.id = id;
+        this.pedindo = false;
+      })
+      .catch(e => {
+        if (geracao !== this.geracao) return;
+        this.pedindo = false;
+        aoErrar({ code: 2, message: (e && e.message) || String(e) });
+      });
+  }
+  parar() {
+    this.geracao++;
+    const id = this.id;
+    this.id = null;
+    this.pedindo = false;
+    if (id) chamar('BackgroundGeolocation', 'removeWatcher', { id }).catch(() => {});
+  }
+  abrirAjustes() { return chamar('BackgroundGeolocation', 'openSettings').catch(() => {}); }
 }
 
 /** Pedal de demonstração acelerado: `fator` segundos de pedal por segundo real. */

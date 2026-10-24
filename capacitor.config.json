@@ -1,0 +1,10 @@
+{
+  "appId": "io.github.diegopayday.hodometro",
+  "appName": "Hodômetro",
+  "webDir": "www",
+  "android": {
+    "useLegacyBridge": true,
+    "backgroundColor": "#111418",
+    "adjustMarginsForEdgeToEdge": "auto"
+  }
+}

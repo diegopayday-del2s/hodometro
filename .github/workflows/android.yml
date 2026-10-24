@@ -1,0 +1,79 @@
+name: android
+
+# Gera o APK do app Android a cada mudança na main e publica em
+# https://github.com/diegopayday-del2s/hodometro/releases/latest
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['**.md']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android
+  cancel-in-progress: false
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Testes do motor de cálculo
+        run: npm test
+
+      - name: Copiar o app para o projeto Android
+        run: npm run android:sync
+
+      - name: Gerar APK
+        id: apk
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          cd android
+          chmod +x gradlew
+          if [ -n "$ANDROID_KEYSTORE_PASSWORD" ]; then
+            ./gradlew --no-daemon assembleRelease
+            cp app/build/outputs/apk/release/app-release.apk ../Hodometro.apk
+            echo "assinado=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Falta o segredo ANDROID_KEYSTORE_PASSWORD. Gerei só um APK de teste, sem publicar."
+            ./gradlew --no-daemon assembleDebug
+            cp app/build/outputs/apk/debug/app-debug.apk ../Hodometro-teste.apk
+            echo "assinado=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publicar na página de versões
+        if: steps.apk.outputs.assinado == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSAO="1.1.${{ github.run_number }}"
+          gh release create "v$VERSAO" Hodometro.apk \
+            --target "${{ github.sha }}" \
+            --title "Hodômetro $VERSAO" \
+            --notes "Instale pelo celular: toque em Hodometro.apk. Instala por cima da versão anterior sem apagar os pedais." \
+            --latest
+
+      - name: Guardar o APK de teste
+        if: steps.apk.outputs.assinado != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Hodometro-teste
+          path: Hodometro-teste.apk

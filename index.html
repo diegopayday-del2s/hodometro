@@ -162,10 +162,15 @@
       <h2 class="secao">Gravação</h2>
       <div class="grupo">
         <label class="linha"><span><b>Pausa automática</b><small>Para o tempo quando você para no semáforo ou numa parada. A média fica real.</small></span><input type="checkbox" role="switch" id="cfgAutoPausa"></label>
-        <label class="linha"><span><b>Manter a tela ligada</b><small>Com a tela apagada o navegador corta o GPS.</small></span><input type="checkbox" role="switch" id="cfgTela"></label>
+        <label class="linha" id="linhaTela"><span><b>Manter a tela ligada</b><small>Com a tela apagada o navegador corta o GPS.</small></span><input type="checkbox" role="switch" id="cfgTela"></label>
         <label class="linha"><span><b>Precisão mínima do GPS</b><small>Leituras piores que isso são descartadas.</small></span>
           <select id="cfgPrecisao"><option value="15">15 m</option><option value="25">25 m (padrão)</option><option value="40">40 m</option></select></label>
       </div>
+    </section>
+
+    <section class="bloco" id="blocoBateria" hidden>
+      <h2 class="secao">Bateria do Android</h2>
+      <p class="hint">Alguns celulares (Samsung, Xiaomi, Motorola) fecham apps em segundo plano para poupar bateria. Se um pedal parar de gravar com a tela apagada, abra Configurações &gt; Apps &gt; Hodômetro &gt; Bateria e escolha "Sem restrições".</p>
     </section>
 
     <section class="bloco">
@@ -207,7 +212,7 @@
       <div class="texto">
         <p><b>Distância:</b> soma o caminho do GPS depois de filtrar o tremido. Quando o celular informa a velocidade do sensor, a distância sai dela, que é mais precisa.</p>
         <p><b>Tempo em movimento e pausas:</b> abaixo de 3 km/h por 5 segundos o app entende que você parou. O tempo parado não entra na média.</p>
-        <p><b>Tela bloqueada:</b> o navegador para o GPS com a tela apagada. Se isso acontecer, o trecho entra em linha reta quando o sinal volta e fica marcado no pedal.</p>
+        <p id="txtTela"><b>Tela bloqueada:</b> o navegador para o GPS com a tela apagada. Se isso acontecer, o trecho entra em linha reta quando o sinal volta e fica marcado no pedal. No app Android isso não acontece.</p>
         <p><b>Subida:</b> vem da altitude do GPS, que varia bastante. Serve como estimativa.</p>
         <p class="hint" id="versao"></p>
       </div>
