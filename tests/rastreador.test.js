@@ -226,3 +226,60 @@ test('estabilidade: 20 sementes do pedal de demonstração, com e sem Doppler', 
     }
   }
 });
+
+test('leituras com precisão pior que 15 m não entram no trajeto', () => {
+  const g = gerarPercurso([
+    { tipo: 'reta', dist: 1500, vel: 18 * KMH },
+    { tipo: 'ruim', acc: 18, trecho: { tipo: 'reta', dist: 200, vel: 18 * KMH } },
+    { tipo: 'reta', dist: 1500, vel: 18 * KMH },
+  ], { semente: 24 });
+  const ruins = g.leituras.filter(f => f.acc > 15);
+  const { r, res } = rodar(g.leituras);
+  perto(res.distancia, 3200, 0.02, 'distância');
+  const ini = (ruins[0].t - r.inicio) / 1000, fim = (ruins[ruins.length - 1].t - r.inicio) / 1000;
+  assert.ok(!res.pontos.some(p => p[2] >= ini && p[2] <= fim), 'nenhum ponto do trecho ruim');
+});
+
+test('salto depois de leituras perdidas é ignorado pela velocidade medida', () => {
+  const g = gerarPercurso([{ tipo: 'reta', dist: 3000, vel: 15 * KMH, rumo: 0 }], { semente: 25 });
+  const l = g.leituras.slice();
+  // Seis vezes: perde 2 leituras e a seguinte vem 40 m para o lado (abaixo de 85 km/h)
+  for (let k = 0; k < 6; k++) {
+    const i = 80 + k * 100;
+    l[i + 3] = { ...l[i + 3], lon: l[i + 3].lon + 40 / (111320 * Math.cos(l[i + 3].lat * Math.PI / 180)) };
+    l.splice(i + 1, 2);
+  }
+  const { res } = rodar(l);
+  perto(res.distancia, 3000, 0.015, 'distância');
+});
+
+test('Doppler acima de 85 km/h é descartado', () => {
+  const g = gerarPercurso([{ tipo: 'reta', dist: 2000, vel: 20 * KMH }], { semente: 26 });
+  for (const i of [50, 150, 250]) g.leituras[i].vel = 95 * KMH;
+  const { res } = rodar(g.leituras);
+  assert.ok(res.velMax * 3.6 < 25, `máxima ${(res.velMax * 3.6).toFixed(1)} km/h`);
+  perto(res.distancia, 2000, 0.015, 'distância');
+});
+
+test('sem pausa automática, ficar parado com o GPS tremendo não soma distância', () => {
+  const g = gerarPercurso([
+    { tipo: 'reta', dist: 1000, vel: 20 * KMH },
+    { tipo: 'parada', dur: 180 },
+    { tipo: 'reta', dist: 1000, vel: 20 * KMH },
+  ], { semente: 27, ruido: 6 });
+  const { res } = rodar(g.leituras, { autoPausa: false });
+  perto(res.distancia, 2000, 0.015, 'distância');
+});
+
+test('velocidade na tela não oscila com o Doppler ruidoso', () => {
+  const g = gerarPercurso([{ tipo: 'reta', dist: 3000, vel: 20 * KMH }], { semente: 28, ruidoVel: 0.8 });
+  const r = new Rastreador({}, g.leituras[0].t - 2000);
+  const tela = [], cru = [];
+  g.leituras.forEach((f, i) => {
+    r.push(f);
+    if (i > 30) { tela.push(r.velAtual); cru.push(f.vel); }
+  });
+  const dp = a => { const m = a.reduce((x, y) => x + y, 0) / a.length; return Math.sqrt(a.reduce((x, y) => x + (y - m) ** 2, 0) / a.length); };
+  assert.ok(dp(tela) < 0.5 * dp(cru), `desvio na tela ${dp(tela).toFixed(2)} m/s, cru ${dp(cru).toFixed(2)} m/s`);
+  dentro(tela.reduce((x, y) => x + y, 0) / tela.length * 3.6, 20, 0.6, 'média da velocidade na tela');
+});

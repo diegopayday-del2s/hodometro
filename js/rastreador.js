@@ -10,22 +10,26 @@
 //   pausado     pausa manual
 //
 // Como a distância é medida:
-//   1. Leituras com precisão ruim ou saltos impossíveis são descartadas.
+//   1. Leituras com precisão pior que 15 m são descartadas. Saltos impossíveis
+//      também: acima de 85 km/h ou longe demais do que a velocidade medida
+//      permite andar desde a última leitura.
 //   2. A posição passa por um filtro de Kalman. Se o aparelho informa
 //      velocidade e direção (Doppler), o filtro usa as duas medidas.
-//   3. Só soma distância em movimento e quando andou mais que um passo
-//      mínimo, para o tremido parado não virar quilômetro.
+//   3. Só soma distância em movimento, acima de 2 km/h e quando andou mais que
+//      a margem de erro da posição, para o tremido parado não virar quilômetro.
 //   4. Com Doppler, a distância de cada trecho sai da velocidade integrada
 //      no tempo, desde que bata com o deslocamento do GPS.
 import { Projecao, FiltroVelocidade, FiltroPosicao, distancia, limitar } from './geo.js';
 
 export const PADRAO = Object.freeze({
-  precisaoMax: 25,          // m: leituras piores que isso são ignoradas
+  precisaoMax: 15,          // m: leituras piores que isso são ignoradas
   autoPausa: true,
   velParada: 0.8,           // m/s (2,9 km/h): abaixo disso pode estar parado
   velRetomada: 1.4,         // m/s (5 km/h): acima disso voltou a andar
   tempoConfirmaParada: 5,   // s abaixo de velParada para pausar
-  velMaxPlausivel: 25,      // m/s (90 km/h): acima disso é salto do GPS
+  velMaxPlausivel: 85 / 3.6, // m/s (85 km/h): acima disso é salto do GPS
+  velMinDistancia: 2 / 3.6, // m/s (2 km/h): abaixo disso não soma distância
+  folgaSalto: 10,           // m: folga do teste de salto contra a velocidade medida
   lacuna: 12,               // s sem leitura boa vira trecho sem sinal
   sinalFracoApos: 15,       // s sem leitura boa para avisar sinal fraco
   aceleracao: 1.5,          // m/s²: o quanto a bike muda de ritmo (filtro com Doppler)
@@ -39,6 +43,7 @@ export const PADRAO = Object.freeze({
   usarDoppler: true,
   altSuave: 0.25,           // suavização da altitude (0 a 1)
   altLimiar: 4,             // m: subida mínima para contar
+  suaveVel: 0.4,            // suavização da velocidade exibida (0 a 1; menor = mais suave)
 });
 
 const r1 = v => Math.round(v * 10) / 10;
@@ -74,11 +79,14 @@ export class Rastreador {
     this.commit = null;       // último ponto que somou distância {x, y, lat, lon}
     this.ancora = null;       // onde a parada começou {x, y}
     this.vels = [];           // últimas velocidades, para a máxima
+    this.velsTela = [];       // últimas velocidades, para a exibida
+    this.velTela = 0;         // velocidade suavizada para a tela
     this.ema = 0;
     this.abaixo = null;       // {desde, mov}: lento, ainda sem confirmar parada
     this.acima = 0;           // leituras seguidas acima de velRetomada
     this.acimaDesde = null;
     this.rejeitados = 0;
+    this.ultimaCrua = null;   // última leitura aceita, sem filtro {x, y, acc}
     this.reancorar = false;
     this.paradaInicial = true;
     this.alt = null;
@@ -107,11 +115,25 @@ export class Rastreador {
     const [rx, ry] = this.proj.paraXY(f.lat, f.lon);
     const dtFix = this.ultimoT == null ? 0 : (f.t - this.ultimoT) / 1000;
 
-    // Salto impossível: ignora até 3 seguidos; no 4º aceita o lugar novo sem somar distância
+    // Velocidade do aparelho (Doppler), quando existe
+    const velValida = Number.isFinite(f.vel) && f.vel >= 0;
+    const vDop = velValida && f.vel <= c.velMaxPlausivel ? f.vel : null;
+
+    // Salto impossível: ignora até 3 seguidos; no 4º aceita o lugar novo sem somar distância.
+    // É salto se passa de 85 km/h, se o próprio aparelho mede mais que isso, ou se
+    // a posição pulou mais do que a velocidade medida permite andar desde a última leitura.
     let saltou = false;
     if (this.fp.ativo && dtFix > 0 && dtFix <= c.lacuna) {
       const d = Math.hypot(rx - this.fp.x, ry - this.fp.y);
-      if (d > acc + 10 && d / dtFix > c.velMaxPlausivel) {
+      let salto = velValida && f.vel > c.velMaxPlausivel;
+      if (d > acc + 10 && d / dtFix > c.velMaxPlausivel) salto = true;
+      const u = this.ultimaCrua;
+      if (!salto && vDop != null && u && dtFix <= 5) {
+        const dCru = Math.hypot(rx - u.x, ry - u.y);
+        const vRef = Math.max(vDop, this.vDopAnt ?? vDop);
+        if (dCru > vRef * dtFix + 2 * Math.max(acc, u.acc) + c.folgaSalto) salto = true;
+      }
+      if (salto) {
         this.rejeitados++;
         if (this.rejeitados < 4) return ev;
         this.fv.reset(); this.fp.reset(); this.janela = [];
@@ -119,9 +141,7 @@ export class Rastreador {
       }
     }
     this.rejeitados = 0;
-
-    // Velocidade do aparelho (Doppler), quando existe
-    const vDop = Number.isFinite(f.vel) && f.vel >= 0 && f.vel <= c.velMaxPlausivel ? f.vel : null;
+    this.ultimaCrua = { x: rx, y: ry, acc };
     if (vDop != null) this.ultimoDop = f.t;
     const modoDop = this.ultimoDop != null && (f.t - this.ultimoDop) / 1000 <= c.memoriaDoppler;
     const rumo = Number.isFinite(f.rumo) ? f.rumo * Math.PI / 180 : null;
@@ -194,7 +214,9 @@ export class Rastreador {
       if (!this.dop) this.dop = { d: 0, ok: true };
       if (vDop != null && vDopAnt != null) this.dop.d += 0.5 * (vDop + vDopAnt) * dt;
       else this.dop.ok = false;
-      if (d >= passo) this.#somar(p, plat, plon, f);
+      // Abaixo de 2 km/h o trecho espera: se for tremido, não soma; se for
+      // andar devagar, entra inteiro na próxima leitura mais rápida
+      if (d >= passo && v >= c.velMinDistancia) this.#somar(p, plat, plon, f);
       this.#parciais(dAntes, movAntes, ev);
       this.#altitude(f, true);
       // Parada: com Doppler, velocidade baixa por alguns segundos. Só com posição,
@@ -224,6 +246,7 @@ export class Rastreador {
       }
       if (this.estado === 'movendo') {
         this.ema = this.ema ? 0.5 * v + 0.5 * this.ema : v;
+        this.#suavizar(v);
         if (acc <= 20) {
           this.vels.push(v);
           if (this.vels.length > 3) this.vels.shift();
@@ -259,12 +282,15 @@ export class Rastreador {
         this.movendoDesde = desde;
         this.acima = 0; this.acimaDesde = null;
         this.ema = v;
+        this.velsTela = []; this.velTela = 0;
+        this.#suavizar(v);
         this.#altitude(f, true);
       } else {
         this.#altitude(f, false);
       }
     }
-    this.velAtual = this.estado === 'movendo' ? this.ema : 0;
+    if (this.estado !== 'movendo') { this.velsTela = []; this.velTela = 0; }
+    this.velAtual = this.estado === 'movendo' ? this.velTela : 0;
     return ev;
   }
 
@@ -367,6 +393,14 @@ export class Rastreador {
   }
 
   // ----- internos -----
+
+  /** Velocidade para a tela: mediana das 3 últimas (tira o pico) e média móvel exponencial. */
+  #suavizar(v) {
+    this.velsTela.push(v);
+    if (this.velsTela.length > 3) this.velsTela.shift();
+    const m = mediana(this.velsTela);
+    this.velTela = this.velTela ? this.cfg.suaveVel * m + (1 - this.cfg.suaveVel) * this.velTela : m;
+  }
 
   #ancorar(p, lat, lon) {
     this.commit = { x: p.x, y: p.y, lat, lon };
