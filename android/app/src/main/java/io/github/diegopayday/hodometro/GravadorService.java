@@ -325,7 +325,7 @@ public class GravadorService extends Service implements LeitorGnss.Ouvinte {
             .setContentTitle(titulo)
             .setContentText(texto)
             .setStyle(new Notification.BigTextStyle().bigText(texto))
-            .setColor(0xFF39FF88)
+            .setColor(0xFFFC5200)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setShowWhen(false)

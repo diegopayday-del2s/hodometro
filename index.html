@@ -4,17 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Hodômetro</title>
-<meta name="description" content="Ciclocomputador no celular: grava o pedal pelo GPS com a tela bloqueada. Distância, velocidade, ritmo, pausas e subida. Funciona offline.">
-<meta name="theme-color" content="#000000">
-<meta name="color-scheme" content="dark">
+<meta name="description" content="Grava o pedal pelo GPS com a tela bloqueada. Progresso, metas, rotas e stories. Funciona offline.">
+<meta name="theme-color" content="#ffffff">
+<meta name="color-scheme" content="light">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icone-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Hodômetro">
-<link rel="preload" href="fonts/barlow-condensed-700.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/barlow-800.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/barlow-700.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="css/app.css">
 <script type="module" src="js/app.js"></script>
 </head>
@@ -28,51 +29,93 @@
   <symbol id="i-sol" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
   <symbol id="i-voz" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
   <symbol id="i-vibra" viewBox="0 0 24 24"><rect x="8" y="4" width="8" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M4.5 8.5v7M2 10.5v3M19.5 8.5v7M22 10.5v3" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
-  <symbol id="i-relogio" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
-  <symbol id="i-media" viewBox="0 0 24 24"><path d="M4 17a8 8 0 0 1 16 0" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M12 17l4-5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
-  <symbol id="i-max" viewBox="0 0 24 24"><path d="M12 4l6 7h-4v9h-4v-9H6z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></symbol>
+  <symbol id="i-ok" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5" fill="currentColor"/><path d="M7.5 12.3l3 3 6-6.3" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-alerta" viewBox="0 0 24 24"><path d="M12 2.8l10 17.6H2z" fill="currentColor"/><path d="M12 9.5v5M12 17.3v.2" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></symbol>
+  <symbol id="i-voltar" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-compartilhar" viewBox="0 0 24 24"><path d="M12 15V3.5M7.5 8L12 3.5 16.5 8M5 12.5V19a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 19v-6.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-lapis" viewBox="0 0 24 24"><path d="M4 20l1-4.5L15.5 5a2.1 2.1 0 0 1 3 3L8 18.5zM13.5 7l3 3" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></symbol>
+  <symbol id="i-rota" viewBox="0 0 24 24"><circle cx="6" cy="18" r="2.4" fill="none" stroke="currentColor" stroke-width="1.9"/><circle cx="18" cy="6" r="2.4" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M8.4 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
+  <symbol id="i-trofeu" viewBox="0 0 24 24"><path d="M7 4h10v4a5 5 0 0 1-10 0zM7 6H4.5a2.5 2.5 0 0 0 2.6 3.4M17 6h2.5a2.5 2.5 0 0 1-2.6 3.4M12 13v4M8.5 20.5h7M9.5 17h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-montanha" viewBox="0 0 24 24"><path d="M2.5 19.5l6.5-11 4 6.5 2.5-3.5 6 8z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></symbol>
-  <symbol id="i-ok" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5" fill="currentColor"/><path d="M7.5 12.3l3 3 6-6.3" fill="none" stroke="#000" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
-  <symbol id="i-alerta" viewBox="0 0 24 24"><path d="M12 2.8l10 17.6H2z" fill="currentColor"/><path d="M12 9.5v5M12 17.3v.2" stroke="#000" stroke-width="2.2" stroke-linecap="round"/></symbol>
+  <symbol id="i-relogio" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
+  <symbol id="i-foto" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.9"/><circle cx="12" cy="12.5" r="3.6" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M8.5 5.5l1.3-2h4.4l1.3 2" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
 </svg>
 
 <div class="app">
 
-  <!-- PEDALAR -->
-  <main class="tela" id="telaPedalar">
+  <!-- INÍCIO -->
+  <main class="tela" id="telaInicio">
+    <header class="barra">
+      <span class="marca-topo" data-nome-app>Hodômetro</span>
+      <button type="button" class="icone" data-ajustes aria-label="Ajustes"><svg><use href="#i-engrenagem"/></svg></button>
+    </header>
 
+    <section class="alerta" id="alertaBolso" hidden>
+      <svg class="ic"><use href="#i-alerta"/></svg>
+      <p id="alertaTxt"></p>
+      <button type="button" class="btn-pilula pequeno" id="alertaBtn">Liberar</button>
+    </section>
+
+    <section class="cartao semana-cartao" aria-label="Esta semana">
+      <div class="cartao-h"><h2>Esta semana</h2><span class="lado" id="semPeriodo"></span></div>
+      <div class="tres">
+        <div><span class="k">Distância</span><b id="semKm">0,00 km</b></div>
+        <div><span class="k">Tempo</span><b id="semTempo">0min</b></div>
+        <div><span class="k">Elevação</span><b id="semSubida">0 m</b></div>
+      </div>
+      <div class="meta-linha" id="semMeta" hidden></div>
+    </section>
+
+    <section class="bloco">
+      <div class="bloco-h"><h2>Suas atividades</h2><button type="button" class="link" data-ir="voce-atividades">Ver todas</button></div>
+      <div id="feed" class="feed"></div>
+    </section>
+
+    <section class="cartao" id="instalar" hidden>
+      <p><b>Instale no celular</b></p>
+      <p class="hint" id="instalarTxt"></p>
+      <div class="linha-btn">
+        <button type="button" class="btn-pilula" id="btnInstalar" hidden>Instalar app</button>
+        <button type="button" class="btn2" id="btnFecharInstalar">Agora não</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- ROTAS -->
+  <main class="tela" id="telaRotas" hidden>
+    <header class="barra"><h1>Rotas</h1><button type="button" class="icone" data-ajustes aria-label="Ajustes"><svg><use href="#i-engrenagem"/></svg></button></header>
+    <p class="hint">O app reconhece sozinho os caminhos que você repete. Faça o mesmo caminho duas vezes e ele aparece aqui, com seu melhor tempo. No resumo de qualquer pedal dá para salvar o caminho como rota.</p>
+    <div id="listaRotas" class="feed"></div>
+  </main>
+
+  <!-- GRAVAR -->
+  <main class="tela" id="telaGravar" hidden>
     <div id="pronto" class="tela">
-      <header class="topo">
-        <div><h1>Hodômetro</h1><span class="lado" id="hojeTxt"></span></div>
-        <button type="button" class="icone" id="btnAjustes" aria-label="Ajustes"><svg><use href="#i-engrenagem"/></svg></button>
-      </header>
+      <header class="barra"><h1>Gravar</h1><button type="button" class="icone" data-ajustes aria-label="Ajustes"><svg><use href="#i-engrenagem"/></svg></button></header>
 
-      <section class="sinal" id="gpsCartao" data-q="desligado" aria-live="polite" aria-label="Sinal do GPS">
-        <div class="sinal-barras" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
-        <div class="sinal-txt">
-          <span class="rot">Sinal do GPS</span>
-          <b id="gpsTitulo">Desligado</b>
-          <span id="gpsSub">Ative para ver o sinal antes de sair.</span>
+      <section class="mapa-vivo" id="mapaVivoCaixa">
+        <canvas id="mapaVivo" aria-label="Mapa com a sua posição"></canvas>
+        <div class="sinal" id="gpsCartao" data-q="desligado" aria-live="polite" aria-label="Sinal do GPS">
+          <div class="sinal-barras" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+          <div class="sinal-txt"><b id="gpsTitulo">GPS desligado</b><span id="gpsSub">Ative para ver o sinal antes de sair.</span></div>
+          <span class="sinal-m" id="gpsMetros"></span>
         </div>
-        <span class="sinal-m" id="gpsMetros"></span>
-        <button type="button" class="btn2" id="btnGps">Ativar GPS</button>
+        <button type="button" class="btn-pilula pequeno sobre-mapa" id="btnGps">Ativar GPS</button>
       </section>
 
       <section class="checklist" id="checklist" hidden aria-label="Pronto para o bolso">
         <h2 class="secao">Pronto para o bolso</h2>
-        <div class="check" id="chkLocal"><svg class="ic"><use href="#i-ok"/></svg><span><b>Localização precisa</b><small></small></span><button type="button" class="btn2" hidden>Liberar</button></div>
-        <div class="check" id="chkNotif"><svg class="ic"><use href="#i-ok"/></svg><span><b>Números na tela de bloqueio</b><small></small></span><button type="button" class="btn2" hidden>Liberar</button></div>
-        <div class="check" id="chkBateria"><svg class="ic"><use href="#i-ok"/></svg><span><b>Bateria sem restrição</b><small></small></span><button type="button" class="btn2" hidden>Liberar</button></div>
+        <div class="check" id="chkLocal"><svg class="ic"><use href="#i-ok"/></svg><span><b>Localização precisa</b><small></small></span><button type="button" class="btn-pilula pequeno" hidden>Liberar</button></div>
+        <div class="check" id="chkNotif"><svg class="ic"><use href="#i-ok"/></svg><span><b>Números na tela de bloqueio</b><small></small></span><button type="button" class="btn-pilula pequeno" hidden>Liberar</button></div>
+        <div class="check" id="chkBateria"><svg class="ic"><use href="#i-ok"/></svg><span><b>Bateria sem restrição</b><small></small></span><button type="button" class="btn-pilula pequeno" hidden>Liberar</button></div>
       </section>
 
-      <div class="bloco">
-        <button type="button" class="iniciar" id="btnComecar"><svg aria-hidden="true"><use href="#i-play"/></svg>Começar pedal</button>
-        <p class="hint" id="dicaComecar"></p>
-      </div>
-
-      <section class="rapidos" aria-label="Avisos no bolso">
-        <h2 class="secao">Avisos no bolso</h2>
-        <div class="rapidos-linha">
+      <section class="opcoes-gravar">
+        <button type="button" class="linha-opcao" id="btnEscolherRota">
+          <svg class="ic"><use href="#i-rota"/></svg><span><b id="rotaEscolhidaTxt">Sem rota</b><small id="rotaEscolhidaSub">Toque para seguir uma rota e correr contra o seu melhor tempo.</small></span><span class="seta">›</span>
+        </button>
+        <div class="rapidos-linha" aria-label="Avisos no bolso">
           <button type="button" class="chip" id="qVoz" aria-pressed="false"><svg aria-hidden="true"><use href="#i-voz"/></svg>Voz</button>
           <button type="button" class="chip" id="qVibra" aria-pressed="false"><svg aria-hidden="true"><use href="#i-vibra"/></svg>Vibração</button>
           <div class="seg" role="group" aria-label="Aviso a cada">
@@ -83,19 +126,11 @@
         <p class="hint" id="qTxt"></p>
       </section>
 
-      <section class="cartao" id="instalar" hidden>
-        <p><b>Instale no celular</b></p>
-        <p class="hint" id="instalarTxt"></p>
-        <div class="linha-btn">
-          <button type="button" class="btn2 cheio" id="btnInstalar" hidden>Instalar app</button>
-          <button type="button" class="btn2" id="btnFecharInstalar">Agora não</button>
-        </div>
-      </section>
-
-      <section class="bloco" id="ultimoBloco" hidden>
-        <div class="bloco-h"><h2>Último pedal</h2></div>
-        <div id="ultimo"></div>
-      </section>
+      <div class="iniciar-area">
+        <button type="button" class="iniciar" id="btnComecar" aria-label="Iniciar pedal"><svg aria-hidden="true"><use href="#i-play"/></svg></button>
+        <span class="iniciar-rot">Iniciar</span>
+        <p class="hint centro" id="dicaComecar"></p>
+      </div>
     </div>
 
     <div id="gravando" class="tela" hidden>
@@ -109,20 +144,20 @@
         </div>
       </div>
 
-      <section class="painel-pedal" id="painelPedal" aria-label="Ciclocomputador">
-        <div class="heroi">
-          <span class="rot">Distância</span>
-          <div class="num"><span id="vDist">0,00</span><small>km</small></div>
-        </div>
-        <div class="heroi vel">
-          <span class="rot">Velocidade</span>
-          <div class="num"><span id="vVel">0,0</span><small>km/h</small></div>
-        </div>
+      <section class="guia" id="guia" hidden aria-live="polite">
+        <div class="guia-h"><b id="guiaNome"></b><span id="guiaDelta"></span></div>
+        <div class="guia-barra"><i id="guiaBarra"></i></div>
+        <p id="guiaTxt"></p>
+      </section>
+
+      <section class="painel-pedal" aria-label="Ciclocomputador">
+        <div class="heroi"><span class="rot">Distância</span><div class="num"><span id="vDist">0,00</span><small>km</small></div></div>
+        <div class="heroi vel"><span class="rot">Velocidade</span><div class="num"><span id="vVel">0,0</span><small>km/h</small></div></div>
         <div class="grade">
-          <div><span class="rot"><svg aria-hidden="true"><use href="#i-relogio"/></svg>Em movimento</span><b id="vMov">00:00</b></div>
-          <div><span class="rot"><svg aria-hidden="true"><use href="#i-media"/></svg>Vel. média</span><b><span id="vMedia">0,0</span><small>km/h</small></b></div>
-          <div><span class="rot"><svg aria-hidden="true"><use href="#i-max"/></svg>Vel. máxima</span><b><span id="vMax">0,0</span><small>km/h</small></b></div>
-          <div><span class="rot"><svg aria-hidden="true"><use href="#i-montanha"/></svg>Altimetria</span><b><span id="vSubida">0</span><small>m</small></b></div>
+          <div><span class="rot">Em movimento</span><b id="vMov">00:00</b></div>
+          <div><span class="rot">Vel. média</span><b><span id="vMedia">0,0</span><small>km/h</small></b></div>
+          <div><span class="rot">Vel. máxima</span><b><span id="vMax">0,0</span><small>km/h</small></b></div>
+          <div><span class="rot">Elevação</span><b><span id="vSubida">0</span><small>m</small></b></div>
         </div>
         <div class="linha3">
           <div><span class="rot">Ritmo</span><b><span id="vRitmo">--</span><small>/km</small></b></div>
@@ -137,69 +172,88 @@
         <button type="button" class="btn-pausa" id="btnPausar"><svg aria-hidden="true"><use href="#i-pausa"/></svg><span>Pausar</span></button>
         <button type="button" class="btn-fim" id="btnFinalizar" aria-describedby="dicaFim"><span class="enche" aria-hidden="true"></span><svg aria-hidden="true"><use href="#i-stop"/></svg><span>Segure para finalizar</span></button>
       </div>
-      <p class="hint centro" id="dicaFim">Segure o botão vermelho por 1,5 segundo. Assim o pedal não acaba sem querer no bolso.</p>
+      <p class="hint centro" id="dicaFim">Segure o botão escuro por 1,5 segundo. Assim o pedal não acaba sem querer no bolso.</p>
       <p class="aviso-tela" id="avisoTela" hidden></p>
     </div>
   </main>
 
-  <!-- HISTÓRICO -->
-  <main class="tela" id="telaHistorico" hidden>
-    <header class="topo"><div><h1>Histórico</h1><span class="lado" id="histQtd"></span></div></header>
-    <div id="lista"></div>
-
-    <details class="painel" id="manual">
-      <summary>Lançar pedal sem GPS</summary>
-      <form class="painel-corpo" id="formManual" novalidate>
-        <div class="grade2">
-          <div class="campo"><label for="mData">Dia</label><input id="mData" type="date"></div>
-          <div class="campo"><label for="mKm">Distância (km)</label><input id="mKm" inputmode="decimal" autocomplete="off" placeholder="8,4"></div>
-        </div>
-        <div class="grade2">
-          <div class="campo"><label for="mMin">Tempo pedalando (min)</label><input id="mMin" inputmode="numeric" autocomplete="off" placeholder="opcional"></div>
-          <div class="campo"><label for="mHora">Hora da saída</label><input id="mHora" type="time"></div>
-        </div>
-        <div class="campo"><label for="mNota">Nota</label><input id="mNota" maxlength="60" autocomplete="off" placeholder="opcional, ex.: ida ao trabalho"></div>
-        <p class="hint" id="mMsg">Para um pedal que você esqueceu de gravar. Não entra nos recordes.</p>
-        <button type="submit" class="btn2 cheio">Salvar pedal</button>
-      </form>
-    </details>
-  </main>
-
-  <!-- ESTATÍSTICAS -->
-  <main class="tela" id="telaEstatisticas" hidden>
-    <header class="topo"><div><h1>Estatísticas</h1><span class="lado" id="estDesde"></span></div></header>
-
-    <section class="total-geral" aria-label="Total geral">
-      <span class="rot">Total geral</span>
-      <div class="num"><span id="estKm">0,0</span><small>km</small></div>
-      <p id="estResumo">Nenhum pedal ainda.</p>
-    </section>
-
-    <div class="dupla">
-      <section class="kpi"><span class="rot">Este mês</span><b><span id="estMesKm">0,0</span><small>km</small></b><span class="s" id="estMesSub"></span></section>
-      <section class="kpi"><span class="rot">Esta semana</span><b><span id="estSemKm">0,0</span><small>km</small></b><span class="s" id="estSemSub"></span></section>
+  <!-- VOCÊ -->
+  <main class="tela" id="telaVoce" hidden>
+    <header class="barra"><h1>Você</h1><button type="button" class="icone" data-ajustes aria-label="Ajustes"><svg><use href="#i-engrenagem"/></svg></button></header>
+    <div class="abas-topo" role="tablist" aria-label="Você">
+      <button type="button" role="tab" data-sub="progresso" aria-selected="true">Progresso</button>
+      <button type="button" role="tab" data-sub="atividades" aria-selected="false">Atividades</button>
     </div>
 
-    <section class="kpi largo"><span class="rot">Tempo pedalando</span><b id="estHoras">0 min</b><span class="s" id="estHorasSub">em movimento, somando todos os pedais</span></section>
+    <div id="subProgresso" class="tela">
+      <div class="chips" role="group" aria-label="Métrica" id="chipsMetrica">
+        <button type="button" class="chip-o" data-metrica="distancia">Distância</button>
+        <button type="button" class="chip-o" data-metrica="tempo">Tempo</button>
+        <button type="button" class="chip-o" data-metrica="subida">Elevação</button>
+      </div>
+      <div class="chips" role="group" aria-label="Período" id="chipsPeriodo">
+        <button type="button" class="chip-o" data-periodo="mes">4 semanas</button>
+        <button type="button" class="chip-o" data-periodo="tri">3 meses</button>
+        <button type="button" class="chip-o" data-periodo="ano">12 meses</button>
+      </div>
 
-    <section class="bloco">
-      <div class="bloco-h"><h2>Semana</h2><span class="tot" id="semTot">0,0 km</span></div>
-      <div class="meta" id="meta" hidden></div>
-      <div class="sem" id="sem"></div>
-      <p class="sem-cap" id="semCap" aria-live="polite"></p>
-    </section>
+      <section class="prog">
+        <h2 id="progTitulo">Distância total</h2>
+        <div class="prog-totais">
+          <div><b><span id="progTotal">0</span><small id="progUnid">km</small></b><span id="progVar" class="var"></span><span class="periodo"><i class="pt laranja"></i><span id="progPer"></span></span></div>
+          <div class="ant" id="progAntCaixa"><b id="progAnt">0 km</b><span class="periodo"><i class="pt azul"></i><span id="progPerAnt"></span></span></div>
+        </div>
+        <div id="grafProgresso"></div>
+        <p class="hint" id="progLeitura">Toque no gráfico para ver cada semana.</p>
+        <button type="button" class="pilula-comparar" id="btnComparar" aria-pressed="true"><i class="traco"></i><span id="compararTxt">3 meses anteriores</span><svg class="ic"><use href="#i-x"/></svg></button>
+      </section>
 
-    <section class="bloco">
-      <div class="bloco-h"><h2>Recordes pessoais</h2><span class="lado">pedais com GPS</span></div>
-      <div class="recordes" id="recordes"></div>
-    </section>
+      <section class="resumo-prog"><span class="rot-ic"><svg class="ic"><use href="#i-trofeu"/></svg>Seu progresso resumido</span><p id="progResumo"></p></section>
+
+      <section class="bloco">
+        <div class="bloco-h"><h2>Metas</h2><button type="button" class="link" id="btnMetas">Definir metas</button></div>
+        <div id="metas" class="metas"></div>
+      </section>
+
+      <section class="bloco">
+        <div class="bloco-h"><h2>Recordes pessoais</h2><span class="lado">pedais com GPS</span></div>
+        <div class="recordes" id="recordes"></div>
+      </section>
+
+      <section class="bloco">
+        <div class="bloco-h"><h2>Desde o começo</h2><span class="lado" id="estDesde"></span></div>
+        <div class="tres cartao">
+          <div><span class="k">Distância</span><b id="estKm">0 km</b></div>
+          <div><span class="k">Tempo</span><b id="estHoras">0min</b></div>
+          <div><span class="k">Pedais</span><b id="estN">0</b></div>
+        </div>
+      </section>
+    </div>
+
+    <div id="subAtividades" class="tela" hidden>
+      <div id="lista"></div>
+      <details class="painel" id="manual">
+        <summary>Lançar pedal sem GPS</summary>
+        <form class="painel-corpo" id="formManual" novalidate>
+          <div class="grade2">
+            <div class="campo"><label for="mData">Dia</label><input id="mData" type="date"></div>
+            <div class="campo"><label for="mKm">Distância (km)</label><input id="mKm" inputmode="decimal" autocomplete="off" placeholder="8,4"></div>
+          </div>
+          <div class="grade2">
+            <div class="campo"><label for="mMin">Tempo pedalando (min)</label><input id="mMin" inputmode="numeric" autocomplete="off" placeholder="opcional"></div>
+            <div class="campo"><label for="mHora">Hora da saída</label><input id="mHora" type="time"></div>
+          </div>
+          <div class="campo"><label for="mNota">Nome</label><input id="mNota" maxlength="60" autocomplete="off" placeholder="opcional, ex.: ida ao trabalho"></div>
+          <p class="hint" id="mMsg">Para um pedal que você esqueceu de gravar. Não entra nos recordes.</p>
+          <button type="submit" class="btn-pilula">Salvar pedal</button>
+        </form>
+      </details>
+    </div>
   </main>
 
   <!-- AJUSTES -->
   <main class="tela" id="telaAjustes" hidden>
-    <header class="topo">
-      <div><button type="button" class="voltar" id="btnFecharAjustes">← Voltar</button><h1>Ajustes</h1></div>
-    </header>
+    <header class="barra"><button type="button" class="icone sem-borda" id="btnFecharAjustes" aria-label="Voltar"><svg><use href="#i-voltar"/></svg></button><h1>Ajustes</h1><span class="espaco"></span></header>
 
     <section class="bloco">
       <h2 class="secao">Gravação</h2>
@@ -208,6 +262,7 @@
         <label class="linha" id="linhaTela"><span><b>Manter a tela ligada</b><small>No navegador o GPS para quando a tela apaga.</small></span><input type="checkbox" role="switch" id="cfgTela"></label>
         <label class="linha"><span><b>Precisão mínima do GPS</b><small>Leituras piores que isso são descartadas.</small></span>
           <select id="cfgPrecisao"><option value="15">15 m (padrão)</option><option value="20">20 m</option><option value="25">25 m</option></select></label>
+        <label class="linha"><span><b>Mapa de fundo</b><small>Mostra ruas e trilhas atrás do trajeto quando tem internet. Sem internet, fica o desenho. A gravação não usa internet.</small></span><input type="checkbox" role="switch" id="cfgMapa"></label>
       </div>
     </section>
 
@@ -228,17 +283,10 @@
 
     <section class="bloco" id="blocoBateria" hidden>
       <h2 class="secao">Android</h2>
-      <p class="hint">Samsung, Xiaomi e Motorola fecham apps em segundo plano para poupar bateria. Deixe o Hodômetro sem restrição para gravar com a tela bloqueada.</p>
+      <p class="hint">Samsung, Xiaomi e Motorola fecham apps em segundo plano para poupar bateria. Deixe o app sem restrição para gravar com a tela bloqueada.</p>
       <div class="linha-btn">
         <button type="button" class="btn2" id="btnBateria">Liberar a bateria</button>
         <button type="button" class="btn2" id="btnAjustesApp">Ajustes do app</button>
-      </div>
-    </section>
-
-    <section class="bloco">
-      <h2 class="secao">Meta</h2>
-      <div class="grupo">
-        <label class="linha"><span><b>Meta da semana (km)</b><small>Aparece em Estatísticas. Deixe vazio para não usar.</small></span><input id="cfgMeta" inputmode="decimal" autocomplete="off" placeholder="0"></label>
       </div>
     </section>
 
@@ -265,31 +313,28 @@
         <p><b>GPS:</b> no app Android a posição vem direto do chip de GPS do celular (satélites), sem Wi-Fi, sem rede e sem internet.</p>
         <p><b>Distância:</b> descarta leituras com precisão pior que 15 m e saltos acima de 85 km/h, filtra o tremido e não soma nada abaixo de 2 km/h. Quando o celular informa a velocidade do sensor, a distância sai dela, que é mais precisa.</p>
         <p><b>Pausa automática:</b> abaixo de 3 km/h por 5 segundos o tempo em movimento para. Volta assim que você passa de 5 km/h. A média usa só o tempo em movimento.</p>
+        <p><b>Rotas:</b> dois pedais são a mesma rota quando saem e chegam no mesmo lugar e 85% do caminho bate. Ida e volta são rotas diferentes.</p>
         <p id="txtTela"><b>Tela bloqueada:</b> no navegador o GPS para com a tela apagada e o trecho entra em linha reta. No app Android isso não acontece.</p>
-        <p><b>Altimetria:</b> vem da altitude do GPS, que varia bastante. É estimativa.</p>
+        <p><b>Elevação:</b> vem da altitude do GPS, que varia bastante. É estimativa.</p>
         <p class="hint" id="versao"></p>
       </div>
     </section>
   </main>
 </div>
 
-<!-- RESUMO DO PEDAL -->
+<!-- ATIVIDADE -->
 <section class="sobreposta" id="detalhe" hidden aria-labelledby="dTitulo">
+  <header class="barra fixa"><button type="button" class="icone sem-borda" id="btnVoltar" aria-label="Voltar"><svg><use href="#i-voltar"/></svg></button><h1>Pedalada</h1><button type="button" class="icone sem-borda" id="btnStoryTopo" aria-label="Compartilhar"><svg><use href="#i-compartilhar"/></svg></button></header>
+  <canvas class="mapa-grande" id="dMapa" aria-label="Mapa do trajeto"></canvas>
   <div class="app tela">
-    <div class="d-topo"><button type="button" class="voltar" id="btnVoltar">← Voltar</button><span id="dSelo"></span></div>
-
-    <article class="resumo" id="cartaoResumo">
-      <header class="resumo-topo">
-        <span class="marca"><img src="icons/icone-192.png" alt="" width="28" height="28">Hodômetro</span>
-        <span id="dData"></span>
-      </header>
-      <h1 id="dTitulo">Pedal</h1>
-      <p class="resumo-sub" id="dSub"></p>
-      <div class="resumo-km"><span id="dKm">0,00</span><small>km</small></div>
-      <div class="resumo-grade" id="dNumeros"></div>
-      <canvas class="mapa" id="dMapa" aria-label="Desenho do trajeto"></canvas>
-    </article>
-
+    <div class="d-titulo">
+      <span id="dSelo"></span>
+      <h1><span id="dTitulo">Pedal</span><button type="button" class="icone sem-borda pequeno" id="btnRenomear" aria-label="Mudar o nome"><svg><use href="#i-lapis"/></svg></button></h1>
+      <p id="dSub"></p>
+    </div>
+    <div class="numeros" id="dNumeros"></div>
+    <div id="dSelos" class="selos"></div>
+    <button type="button" class="btn-pilula" id="btnStory"><svg aria-hidden="true"><use href="#i-compartilhar"/></svg>Compartilhar nos stories</button>
     <section class="bloco" id="dGraficoBloco">
       <div class="bloco-h"><h2>Velocidade</h2><span class="lado">km/h por km</span></div>
       <div id="dGrafico"></div>
@@ -301,14 +346,58 @@
     </section>
     <p class="hint" id="dNotas"></p>
     <div class="linha-btn">
-      <button type="button" class="btn2 cheio" id="btnCompartilhar">Compartilhar resumo</button>
+      <button type="button" class="btn2" id="btnCompartilhar">Resumo em texto</button>
       <button type="button" class="btn2" id="btnGpx">Exportar GPX</button>
+      <button type="button" class="btn2" id="btnSalvarRota">Salvar como rota</button>
     </div>
     <button type="button" class="btn2 perigo" id="btnApagar">Excluir pedal</button>
   </div>
 </section>
 
-<!-- CONFIRMAÇÃO -->
+<!-- ROTA -->
+<section class="sobreposta" id="rotaDetalhe" hidden aria-labelledby="rTitulo">
+  <header class="barra fixa"><button type="button" class="icone sem-borda" id="btnVoltarRota" aria-label="Voltar"><svg><use href="#i-voltar"/></svg></button><h1>Rota</h1><span class="espaco"></span></header>
+  <canvas class="mapa-grande" id="rMapa" aria-label="Mapa da rota"></canvas>
+  <div class="app tela">
+    <div class="d-titulo">
+      <h1><span id="rTitulo">Rota</span><button type="button" class="icone sem-borda pequeno" id="btnRenomearRota" aria-label="Mudar o nome"><svg><use href="#i-lapis"/></svg></button></h1>
+      <p class="rota-linha" id="rLinha"></p>
+    </div>
+    <div class="linha-btn">
+      <button type="button" class="btn-pilula" id="btnPedalarRota"><svg aria-hidden="true"><use href="#i-play"/></svg>Pedalar esta rota</button>
+    </div>
+    <div class="numeros" id="rNumeros"></div>
+    <section class="bloco">
+      <div class="bloco-h"><h2>Horas de atividade</h2></div>
+      <p class="hint" id="rHorasTxt"></p>
+      <div id="rHoras"></div>
+    </section>
+    <section class="bloco">
+      <div class="bloco-h"><h2>Suas tentativas</h2><span class="lado">tempo em movimento</span></div>
+      <div id="rTentativas" class="tentativas"></div>
+    </section>
+    <button type="button" class="btn2 perigo" id="btnApagarRota">Excluir rota</button>
+  </div>
+</section>
+
+<!-- STORIES -->
+<section class="sobreposta escura" id="story" hidden aria-label="Compartilhar nos stories">
+  <header class="barra fixa escura"><button type="button" class="icone sem-borda" id="btnFecharStory" aria-label="Fechar"><svg><use href="#i-x"/></svg></button><h1>Stories</h1><span class="espaco"></span></header>
+  <div class="story-corpo">
+    <div class="story-previa"><canvas id="storyCanvas" aria-label="Imagem para os stories"></canvas></div>
+    <div class="chips centro" role="group" aria-label="Modelo">
+      <button type="button" class="chip-o claro" data-modelo="laranja">Laranja</button>
+      <button type="button" class="chip-o claro" data-modelo="foto">Com foto</button>
+      <button type="button" class="chip-o claro" data-modelo="transparente">Transparente</button>
+    </div>
+    <label class="btn2 claro" for="arqFoto" id="btnFoto" hidden><svg aria-hidden="true" class="ic"><use href="#i-foto"/></svg>Escolher foto</label>
+    <input type="file" id="arqFoto" accept="image/*" hidden>
+    <p class="hint centro claro" id="storyDica"></p>
+    <button type="button" class="btn-pilula" id="btnEnviarStory"><svg aria-hidden="true"><use href="#i-compartilhar"/></svg>Compartilhar imagem</button>
+  </div>
+</section>
+
+<!-- DIÁLOGOS -->
 <dialog class="dialogo" id="dlgConfirma" aria-labelledby="cfTitulo">
   <form method="dialog">
     <h2 id="cfTitulo"></h2>
@@ -320,7 +409,42 @@
   </form>
 </dialog>
 
-<!-- LANÇAR UM PEDAL QUE NÃO FOI GRAVADO -->
+<dialog class="dialogo" id="dlgTexto" aria-labelledby="txTitulo">
+  <form method="dialog">
+    <h2 id="txTitulo"></h2>
+    <input id="txCampo" class="campo-grande" maxlength="60" autocomplete="off" aria-labelledby="txTitulo">
+    <p class="hint" id="txDica"></p>
+    <div class="linha-btn">
+      <button type="submit" class="btn2" value="nao">Cancelar</button>
+      <button type="submit" class="btn-pilula" value="sim">Salvar</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="dialogo" id="dlgMetas" aria-labelledby="mtTitulo">
+  <form method="dialog" id="formMetas">
+    <h2 id="mtTitulo">Metas</h2>
+    <p class="hint">Deixe vazio o que não quiser usar.</p>
+    <div class="meta-campo"><span>Semana</span><input id="mtSemana" inputmode="decimal" autocomplete="off" placeholder="km"><select id="mtSemanaTipo" aria-label="Tipo da meta da semana"><option value="distancia">km</option><option value="tempo">horas</option><option value="subida">m de subida</option></select></div>
+    <div class="meta-campo"><span>Mês</span><input id="mtMes" inputmode="decimal" autocomplete="off" placeholder="km"><select id="mtMesTipo" aria-label="Tipo da meta do mês"><option value="distancia">km</option><option value="tempo">horas</option><option value="subida">m de subida</option></select></div>
+    <div class="meta-campo"><span>Ano</span><input id="mtAno" inputmode="decimal" autocomplete="off" placeholder="km"><select id="mtAnoTipo" aria-label="Tipo da meta do ano"><option value="distancia">km</option><option value="tempo">horas</option><option value="subida">m de subida</option></select></div>
+    <div class="linha-btn">
+      <button type="submit" class="btn2" value="nao">Cancelar</button>
+      <button type="submit" class="btn-pilula" value="sim">Salvar</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="dialogo" id="dlgRotas" aria-labelledby="erTitulo">
+  <form method="dialog">
+    <h2 id="erTitulo">Seguir uma rota</h2>
+    <div id="erLista" class="opcoes"></div>
+    <div class="linha-btn">
+      <button type="submit" class="btn2" value="nao">Fechar</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog class="dialogo" id="dlgLancar" aria-labelledby="lcTitulo">
   <form method="dialog" id="formLancar">
     <h2 id="lcTitulo">Registrar um pedal</h2>
@@ -333,28 +457,32 @@
     <p class="hint">Sem trajeto: fica marcado como lançado à mão e não entra nos recordes.</p>
     <div class="linha-btn">
       <button type="submit" class="btn2" value="nao">Agora não</button>
-      <button type="submit" class="btn2 cheio" value="sim">Salvar</button>
+      <button type="submit" class="btn-pilula" value="sim">Salvar</button>
     </div>
   </form>
 </dialog>
 
 <nav class="abas" id="abas" aria-label="Telas">
-  <button type="button" data-tela="pedalar" aria-current="page">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="16" r="3.6" fill="none" stroke="currentColor" stroke-width="1.9"/><circle cx="18" cy="16" r="3.6" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M6 16l4-7h6l2 7M10 9l3 7h-7M14.5 6.5h2.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"/></svg>
-    Pedalar
+  <button type="button" data-tela="inicio" aria-current="page">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11L12 4l8.5 7M6 9v11h4.5v-6h3v6H18V9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></svg>
+    Início
   </button>
-  <button type="button" data-tela="historico">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M8 9h8M8 13h8M8 17h5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>
-    Histórico
+  <button type="button" data-tela="rotas">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-rota"/></svg>
+    Rotas
   </button>
-  <button type="button" data-tela="estatisticas">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V11M10 20V5M16 20v-7M22 20H2" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>
-    Estatísticas
+  <button type="button" data-tela="gravar">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="4.6" fill="currentColor"/></svg>
+    Gravar
+  </button>
+  <button type="button" data-tela="voce">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9 3.5v3M15 3.5v3M8.5 16v-3M12 16v-6M15.5 16v-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    Você
   </button>
 </nav>
 
 <div class="toast" id="toast" aria-live="polite" hidden></div>
 
-<noscript><p style="padding:16px">O Hodômetro precisa de JavaScript ligado.</p></noscript>
+<noscript><p style="padding:16px">O app precisa de JavaScript ligado.</p></noscript>
 </body>
 </html>

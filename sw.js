@@ -1,6 +1,6 @@
 // Service worker: guarda o app no celular para abrir sem internet.
 // Ao mudar qualquer arquivo, suba a VERSAO para o celular baixar a nova.
-const VERSAO = '1.2.0';
+const VERSAO = '1.3.0';
 const CACHE = `hodometro-${VERSAO}`;
 const ARQUIVOS = [
   './',
@@ -14,16 +14,23 @@ const ARQUIVOS = [
   'js/formato.js',
   'js/geo.js',
   'js/gpx.js',
+  'js/graficos.js',
+  'js/mapa.js',
+  'js/marca.js',
   'js/nativo.js',
+  'js/progresso.js',
   'js/rastreador.js',
+  'js/rotas.js',
   'js/simulador.js',
+  'js/story.js',
+  'js/ui.js',
   'js/vibra.js',
   'js/voz.js',
   'fonts/barlow-400.woff2',
+  'fonts/barlow-500.woff2',
   'fonts/barlow-600.woff2',
   'fonts/barlow-700.woff2',
-  'fonts/barlow-condensed-600.woff2',
-  'fonts/barlow-condensed-700.woff2',
+  'fonts/barlow-800.woff2',
   'icons/icone-192.png',
   'icons/icone-512.png',
   'icons/icone-maskable-512.png',

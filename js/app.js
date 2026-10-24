@@ -1,4 +1,4 @@
-// Hodômetro: controle das telas, do GPS e da gravação.
+// Controle das telas, do GPS e da gravação.
 import { Rastreador } from './rastreador.js';
 import * as F from './formato.js';
 import * as A from './armazem.js';
@@ -8,64 +8,74 @@ import { falar, temVoz } from './voz.js';
 import { vibrar, temVibracao } from './vibra.js';
 import { gerarGPX } from './gpx.js';
 import { desenharTrajeto, graficoVelocidade } from './desenho.js';
+import { trajetoNoMapa, posicaoNoMapa } from './mapa.js';
+import { desenharStory, pngBase64 } from './story.js';
+import { progresso, resumoProgresso, avaliarMeta, PERIODOS } from './progresso.js';
+import { organizarRotas, estatisticasRota, rotaDoPedal, GuiaRota } from './rotas.js';
+import { graficoProgresso, histogramaHoras, anel } from './graficos.js';
+import { $, $$, h, icone, aviso, confirmar, pedirTexto, segurarPara, quandoAparecer } from './ui.js';
+import { NOME_APP } from './marca.js';
 
-export const VERSAO = '1.2.0';
+export const VERSAO = '1.3.0';
 
 // No app Android o GPS vem do chip e segue com a tela apagada; no navegador, não
 const NATIVO = ehNativo();
 
-const $ = s => document.querySelector(s);
-const $$ = s => [...document.querySelectorAll(s)];
-
-function h(tag, attrs, ...filhos) {
-  const el = document.createElement(tag);
-  if (attrs) for (const k in attrs) {
-    const v = attrs[k];
-    if (v == null || v === false) continue;
-    if (k === 'class') el.className = v;
-    else if (k === 'text') el.textContent = v;
-    else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
-    else if (k === 'style') el.style.cssText = v;
-    else el.setAttribute(k, v === true ? '' : v);
-  }
-  for (const f of filhos.flat()) if (f != null && f !== false) el.append(f.nodeType ? f : document.createTextNode(String(f)));
-  return el;
-}
-
 // ---------- ajustes ----------
-const CFG_PADRAO = { v: 2, autoPausa: true, telaWeb: true, precisao: 15, voz: true, vibrar: true, avisoKm: 1, vozPausa: false, meta: 0 };
+const CFG_PADRAO = {
+  v: 3, autoPausa: true, telaWeb: true, precisao: 15, voz: true, vibrar: true, avisoKm: 1, vozPausa: false,
+  mapa: true, metas: { semana: null, mes: null, ano: null },
+};
 
 function lerCfg() {
   let c = {};
   try { c = JSON.parse(localStorage.getItem('hodometro.cfg') || '{}') || {}; } catch { c = {}; }
   if (!c.v) {
-    // Ajustes da versão 1.1: "voz" era o intervalo (0, 1, 2 ou 5 km) e a precisão padrão era 25 m
+    // Versão 1.1: "voz" era o intervalo (0, 1, 2 ou 5 km) e a precisão padrão era 25 m
     const vozAntiga = typeof c.voz === 'number' ? c.voz : 1;
     c = { ...c, v: 2, voz: vozAntiga > 0, avisoKm: vozAntiga >= 5 ? 5 : 1, precisao: 15, telaWeb: c.telaLigada ?? true };
     delete c.telaLigada;
   }
+  if (c.v === 2) {
+    // Versão 1.2: só havia a meta da semana, em km
+    c.metas = { semana: c.meta > 0 ? { tipo: 'distancia', alvo: c.meta } : null, mes: null, ano: null };
+    delete c.meta;
+    c.mapa = true;
+    c.v = 3;
+  }
   if (![15, 20, 25].includes(c.precisao)) c.precisao = 15;
   if (![1, 5].includes(c.avisoKm)) c.avisoKm = 1;
-  return { ...CFG_PADRAO, ...c };
+  return { ...CFG_PADRAO, ...c, metas: { ...CFG_PADRAO.metas, ...(c.metas || {}) } };
 }
 function salvarCfg() { try { localStorage.setItem('hodometro.cfg', JSON.stringify(S.cfg)); } catch { /* sem espaço */ } }
 
 const S = {
   cfg: lerCfg(),
   pedais: [],
-  tela: 'pedalar',
-  telaAntes: 'pedalar',
+  rotas: [],
+  tentativas: {},
+  tela: 'inicio',
+  telaAntes: 'inicio',
+  sub: 'progresso',
+  metrica: 'distancia',
+  periodo: 'tri',
+  comparar: true,
   r: null,            // Rastreador do pedal em andamento
   fonte: null,        // de onde vêm as leituras do pedal em andamento
   demo: false,
+  guia: null,         // rota sendo seguida no pedal em andamento
+  rotaEscolhida: null,
   gps: { estado: 'desligado', acc: null, t: 0, usados: null, vistos: null },
   perm: { local: null, notif: null, bateria: null },
+  mapaVivo: null,     // última posição desenhada no mapa do Gravar
   telaAcesa: false,   // modo guidão
   wake: null,
   wakeFalhou: false,
   instalar: null,
   detalhe: null,
-  semSel: null,
+  rotaAberta: null,
+  story: null,
+  pilha: [],          // telas por cima (resumo, rota, stories), para o Voltar
   salvoEm: 0,
   notifEm: 0,
   recuperando: false,
@@ -74,56 +84,7 @@ const S = {
 const gps = NATIVO ? new FonteNativa() : new FonteGPS();
 salvarCfg();
 
-// ---------- utilidades de tela ----------
-let toastT = 0;
-function aviso(msg, acaoTxt, acao, ms) {
-  const t = $('#toast');
-  t.replaceChildren(h('div', { class: 'toast-in' }, h('span', { text: msg }),
-    acaoTxt ? h('button', { type: 'button', text: acaoTxt, onclick: () => { t.hidden = true; acao(); } }) : null));
-  t.hidden = false;
-  clearTimeout(toastT);
-  toastT = setTimeout(() => { t.hidden = true; }, ms || (acaoTxt ? 8000 : 4000));
-}
-
-/** Diálogo de confirmação. Devolve true se a pessoa confirmou. */
-function confirmar(titulo, texto, sim = 'Excluir') {
-  const d = $('#dlgConfirma');
-  if (typeof d.showModal !== 'function') return Promise.resolve(window.confirm(`${titulo}\n\n${texto}`));
-  $('#cfTitulo').textContent = titulo;
-  $('#cfTexto').textContent = texto;
-  $('#cfSim').textContent = sim;
-  d.returnValue = '';
-  return new Promise(ok => {
-    d.addEventListener('close', () => ok(d.returnValue === 'sim'), { once: true });
-    d.showModal();
-  });
-}
-
-/**
- * Botão de segurar: só dispara depois de `ms` apertado, com a barra enchendo.
- * Soltar antes cancela. Protege o Finalizar de toque sem querer no bolso.
- */
-function segurarPara(btn, ms, acao) {
-  let timer = 0, disparou = false;
-  const soltar = () => { if (!timer) return; clearTimeout(timer); timer = 0; btn.classList.remove('segurando'); };
-  const apertar = ev => {
-    if (timer) return;
-    if (ev.pointerId != null) { try { btn.setPointerCapture(ev.pointerId); } catch { /* sem captura */ } }
-    btn.classList.add('segurando');
-    timer = setTimeout(() => { timer = 0; disparou = true; btn.classList.remove('segurando'); acao(); }, ms);
-  };
-  btn.addEventListener('pointerdown', apertar);
-  for (const e of ['pointerup', 'pointercancel', 'lostpointercapture']) btn.addEventListener(e, soltar);
-  btn.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) { e.preventDefault(); apertar(e); } });
-  btn.addEventListener('keyup', e => { if (e.key === 'Enter' || e.key === ' ') soltar(); });
-  btn.addEventListener('contextmenu', e => e.preventDefault());
-  btn.addEventListener('click', e => {
-    e.preventDefault();
-    if (disparou) { disparou = false; return; }
-    if (!timer) aviso('Segure o botão vermelho por 1,5 segundo para finalizar.');
-  });
-}
-
+// ---------- utilidades ----------
 const parseNum = (s, max) => {
   s = String(s ?? '').trim().replace(/\s/g, '');
   if (!s) return null;
@@ -131,8 +92,8 @@ const parseNum = (s, max) => {
   const n = Number(s);
   return Number.isFinite(n) && n > 0 && n <= max ? n : null;
 };
-
 const novoId = t => 'p' + Math.round(t).toString(36) + Math.random().toString(36).slice(2, 6);
+const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
 
 /** "hoje", "ontem" ou "em sáb, 24/10". */
 function emDia(t) {
@@ -141,10 +102,16 @@ function emDia(t) {
 }
 
 function tituloPedal(p) {
+  if (p.nome) return p.nome;
   if (p.via === 'manual') return p.nota || 'Pedal lançado à mão';
   const hr = new Date(p.inicio).getHours();
   return hr >= 5 && hr < 12 ? 'Pedal da manhã' : hr >= 12 && hr < 18 ? 'Pedal da tarde' : 'Pedal da noite';
 }
+const quandoPedal = p => (p.via === 'manual' && !p.horaInformada ? `${F.quandoLongo(p.inicio, false)} · lançado à mão` : F.quandoLongo(p.inicio));
+const temTrajeto = p => (p.pontos || []).length > 2;
+const nomeRota = r => r.nome || `Caminho de ${F.km1(r.dist)} km`;
+const rotasVisiveis = () => S.rotas.filter(r => !r.oculta);
+const rotaDoPedalId = id => S.rotas.find(r => !r.oculta && (S.tentativas[r.id] || []).includes(id)) || null;
 
 /** Pedal lançado à mão, sem trajeto. `hora` "HH:MM" opcional; sem ela fica ao meio-dia. */
 function pedalManual(dia, metros, segundos, nota, hora) {
@@ -157,6 +124,51 @@ function pedalManual(dia, metros, segundos, nota, hora) {
     velMax: 0, subida: 0, pausas: 0, tempoPausas: 0, parciais: [], paradas: [], lacunas: [], pontos: [],
     nota: (nota || '').trim().slice(0, 60), horaInformada: !!hora,
   };
+}
+
+/** Desenho do trajeto agora e, se tiver internet, o mapa por baixo logo depois. */
+function desenharMapaPedal(canvas, pontos, lacunas = []) {
+  desenharTrajeto(canvas, { pontos, lacunas: lacunas.map(i => ({ i })) });
+  if (S.cfg.mapa) trajetoNoMapa(canvas, pontos, { lacunas });
+}
+
+// ---------- rotas ----------
+async function carregarRotas() {
+  let salvas = [];
+  try { salvas = (await A.lerEstado('rotas')) || []; } catch { salvas = []; }
+  atualizarRotas(salvas);
+}
+function atualizarRotas(salvas = S.rotas) {
+  const r = organizarRotas(salvas, S.pedais);
+  S.rotas = r.rotas;
+  S.tentativas = r.tentativas;
+  if (r.mudou) salvarRotas();
+}
+function salvarRotas() { A.salvarEstado('rotas', S.rotas).catch(() => {}); }
+
+/** Posição do pedal entre as tentativas da rota (1 = melhor tempo). */
+function posicaoNaRota(rota, p) {
+  const lista = (S.tentativas[rota.id] || []).map(id => S.pedais.find(x => x.id === id)).filter(x => x && x.tempoMov > 0).sort((a, b) => a.tempoMov - b.tempoMov);
+  const i = lista.findIndex(x => x.id === p.id);
+  return i < 0 ? null : i + 1;
+}
+
+/** Selos do pedal: rota e recordes. */
+function selosPedal(p, comMarcas = true) {
+  const selos = [];
+  const rota = rotaDoPedalId(p.id);
+  if (rota) {
+    const pos = posicaoNaRota(rota, p);
+    selos.push(h('span', { class: 'selo laranja' }, icone('rota'), `${nomeRota(rota)}${pos === 1 ? ' · melhor tempo' : pos ? ` · ${pos}º tempo` : ''}`));
+  }
+  const r = F.recordes(S.pedais);
+  const varios = S.pedais.filter(x => x.via === 'gps' && !x.demo).length > 1;
+  if (varios && r.maiorDistancia && r.maiorDistancia.id === p.id) selos.push(h('span', { class: 'selo laranja' }, icone('trofeu'), 'Maior pedal'));
+  if (varios && r.maiorVel && r.maiorVel.id === p.id) selos.push(h('span', { class: 'selo laranja' }, icone('trofeu'), 'Maior velocidade'));
+  if (varios && r.maiorMedia && r.maiorMedia.id === p.id) selos.push(h('span', { class: 'selo laranja' }, icone('trofeu'), 'Maior média'));
+  if (comMarcas && p.demo) selos.push(h('span', { class: 'selo', text: 'demonstração' }));
+  if (comMarcas && p.via === 'manual') selos.push(h('span', { class: 'selo', text: 'sem GPS' }));
+  return selos;
 }
 
 // ---------- GPS antes de sair ----------
@@ -188,7 +200,10 @@ function aoLerGps(f) {
   if (S.r && !S.demo) {
     if (S.recuperando) S.fila.push(f);
     else processar(f);
-  } else renderGps();
+  } else {
+    renderGps();
+    atualizarMapaVivo(f);
+  }
 }
 function aoErroGps(e) {
   if (e.code === 1) { S.gps.estado = 'negado'; S.perm.local = 'denied'; gps.parar(); }
@@ -198,17 +213,30 @@ function aoErroGps(e) {
   renderGps();
   renderChecklist();
   if (S.r && !S.demo) {
-    if (e.code === 1) aviso(NATIVO ? 'A localização foi bloqueada. Libere a localização precisa para o Hodômetro nos ajustes do Android.' : 'A localização foi bloqueada. Libere nas configurações do navegador para continuar gravando.');
+    if (e.code === 1) aviso(NATIVO ? 'A localização foi bloqueada. Libere a localização precisa para o app nos ajustes do Android.' : 'A localização foi bloqueada. Libere nas configurações do navegador para continuar gravando.');
     else if (e.tipo === 'GPS_DESLIGADO') aviso('A localização do celular está desligada. Ligue de novo para continuar gravando.', 'Ligar', () => gps.abrirAjustes('localizacao'));
   }
 }
 
 async function aquecerGPS() {
-  if (S.r || document.hidden || S.tela !== 'pedalar') return;
+  if (S.r || document.hidden || S.tela !== 'gravar' || S.pilha.length) return;
   let liberado = false;
   if (NATIVO) { try { liberado = localStorage.getItem('hodometro.gpsLiberado') === '1'; } catch { /* ok */ } }
   else liberado = await permissaoGps() === 'granted';
   if (liberado) ligarGPS(false);
+}
+
+/** Mapa do Gravar centrado em você; redesenha se andou mais de 25 m. */
+async function atualizarMapaVivo(f) {
+  const caixa = $('#mapaVivoCaixa');
+  if (!S.cfg.mapa || S.tela !== 'gravar' || !f) return;
+  const m = S.mapaVivo;
+  if (m && Math.hypot((f.lat - m.lat) * 111320, (f.lon - m.lon) * 111320 * Math.cos(f.lat * Math.PI / 180)) < 25 && Math.abs(f.acc - m.acc) < 10) return;
+  S.mapaVivo = { lat: f.lat, lon: f.lon, acc: f.acc };
+  // O mapa só aparece depois de carregado; sem internet fica só o cartão do GPS
+  const ok = await posicaoNoMapa($('#mapaVivo'), f.lat, f.lon, f.acc);
+  caixa.classList.toggle('sem-mapa', !ok);
+  if (!ok) S.mapaVivo = null;
 }
 
 /** Qualidade do sinal para o cartão do GPS. */
@@ -229,6 +257,7 @@ async function conferirPermissoes() {
   try { const n = await chamar('LocalNotifications', 'checkPermissions'); S.perm.notif = n.display; } catch { /* segue */ }
   try { const b = await chamar('Gravador', 'bateria'); S.perm.bateria = !!b.bateriaLivre; } catch { /* segue */ }
   renderChecklist();
+  if (S.tela === 'inicio') renderAlerta();
 }
 
 /** Android 13+: a notificação com os números do pedal precisa de permissão. */
@@ -256,8 +285,19 @@ async function pedirBateria() {
     n++;
     try { const b = await chamar('Gravador', 'bateria'); S.perm.bateria = !!b.bateriaLivre; } catch { /* segue */ }
     renderChecklist();
+    renderAlerta();
     if (S.perm.bateria || n >= 30) clearInterval(esperaBateria);
   }, 1000);
+}
+
+/** O que falta para gravar no bolso (Android), na ordem de importância. */
+function pendenciaBolso() {
+  if (!NATIVO) return null;
+  const p = S.perm;
+  if (p.local === 'denied') return { txt: 'A localização está bloqueada. Sem ela o app não grava.', btn: 'Abrir ajustes', acao: () => gps.abrirAjustes('app') };
+  if (p.bateria === false) return { txt: 'A otimização de bateria está ligada. O Android pode parar a gravação com a tela bloqueada.', btn: 'Liberar', acao: pedirBateria };
+  if (p.notif && p.notif !== 'granted') return { txt: 'Sem notificação, os números do pedal não aparecem na tela de bloqueio.', btn: 'Liberar', acao: async () => { await pedirNotificacao(); if (S.perm.notif !== 'granted') gps.abrirAjustes('notificacoes'); renderAlerta(); } };
+  return null;
 }
 
 // ---------- gravação ----------
@@ -273,11 +313,21 @@ function agendarPainel() {
 function processar(f, silencioso = false) {
   if (!S.r) return;
   tratarEventos(S.r.push(f), silencioso);
+  if (S.guia && S.r.estado !== 'pausado' && Number.isFinite(f.acc) && f.acc <= S.cfg.precisao) tratarGuia(S.guia.atualizar(f.lat, f.lon, S.r.tempoMov), silencioso);
   if (silencioso) return;
   agendarPainel();
   atualizarNotificacao();
   // Com a tela apagada o relógio da página fica lento; salva também por leitura
   if (!S.demo && Date.now() - S.salvoEm > 15000) salvarAtivo();
+}
+
+/** "0:32 à frente", "0:15 atrás"; falado: "32 segundos à frente do seu melhor." */
+function textoDelta(delta, falado = false) {
+  if (delta == null) return '';
+  const s = Math.abs(delta);
+  if (s < 2) return falado ? 'No ritmo do seu melhor tempo.' : 'no ritmo do melhor';
+  const t = falado ? F.duracaoFalada(s) : F.duracao(s);
+  return delta < 0 ? (falado ? `${t} à frente do seu melhor.` : `${t} à frente`) : (falado ? `${t} atrás do seu melhor.` : `${t} atrás`);
 }
 
 function tratarEventos(evs, silencioso = false) {
@@ -286,7 +336,7 @@ function tratarEventos(evs, silencioso = false) {
     if (ev.tipo === 'km') {
       $('#parcial').textContent = `Km ${ev.km} em ${F.duracao(ev.tempo)} · ${F.kmh(ev.tempo > 0 ? 1000 / ev.tempo : 0)} km/h`;
       if (silencioso || ev.km % c.avisoKm !== 0) continue;
-      if (c.voz) falar(F.falaKm(ev.km, ev.tempo, ev.media));
+      if (c.voz) falar(F.falaKm(ev.km, ev.tempo, ev.media) + (S.guia && S.guia.delta != null ? ' ' + textoDelta(S.guia.delta, true) : ''));
       if (c.vibrar) vibrar('km');
     } else if (ev.tipo === 'parou') {
       if (silencioso) continue;
@@ -304,13 +354,35 @@ function tratarEventos(evs, silencioso = false) {
   }
 }
 
+function tratarGuia(evs, silencioso) {
+  if (silencioso || !evs.length) return;
+  const c = S.cfg;
+  for (const ev of evs) {
+    if (ev === 'saiu') {
+      if (c.vibrar) vibrar('fora');
+      if (c.voz) falar('Você saiu da rota.');
+    } else if (ev === 'voltou') {
+      if (c.voz) falar('De volta à rota.');
+    } else if (ev === 'concluiu') {
+      const g = S.guia;
+      const recorde = g.melhorTempo && S.r.tempoMov < g.melhorTempo;
+      if (c.vibrar) vibrar('fim');
+      if (c.voz) falar(`Rota concluída em ${F.duracaoFalada(S.r.tempoMov)}. ${recorde ? 'É o seu melhor tempo!' : g.melhorTempo ? textoDelta(S.r.tempoMov - g.melhorTempo, true) : ''}`);
+      aviso(recorde ? 'Rota concluída com o seu melhor tempo!' : 'Rota concluída. Pode seguir ou finalizar o pedal.', null, null, 6000);
+    }
+  }
+  atualizarNotificacao(true);
+}
+
 /** Números da notificação na tela de bloqueio (no máximo a cada 2 s). */
 function atualizarNotificacao(agoraJa = false) {
   if (!NATIVO || S.demo || !S.r) return;
   const agora = Date.now();
   if (!agoraJa && agora - S.notifEm < 2000) return;
   S.notifEm = agora;
-  const { titulo, texto } = F.textoNotificacao(S.r.painel(agora));
+  const g = S.guia;
+  const extra = g ? (g.concluida ? 'rota concluída' : g.fora ? 'fora da rota' : `faltam ${F.km2(g.falta)} km da rota`) : '';
+  const { titulo, texto } = F.textoNotificacao(S.r.painel(agora), extra);
   gps.notificar(titulo, texto);
 }
 
@@ -330,7 +402,9 @@ function iniciarRelogio() {
 async function salvarAtivo() {
   if (!S.r || S.demo) return;
   S.salvoEm = Date.now();
-  try { await A.salvarEstado('ativo', { r: S.r.toJSON(), salvoEm: S.salvoEm }); } catch { /* tenta de novo no próximo ciclo */ }
+  const g = S.guia;
+  const guia = g ? { id: g.rota.id, feito: g.feito, i: g.i, fora: g.fora, concluida: g.concluida } : null;
+  try { await A.salvarEstado('ativo', { r: S.r.toJSON(), salvoEm: S.salvoEm, guia }); } catch { /* tenta de novo no próximo ciclo */ }
 }
 
 /**
@@ -376,6 +450,14 @@ function soltarWake() {
   S.wake = null;
 }
 
+/** Guia da rota escolhida, com o melhor tempo para comparar. */
+function criarGuia(idRota) {
+  const rota = S.rotas.find(r => r.id === idRota);
+  if (!rota) return null;
+  const melhor = estatisticasRota(S.tentativas[rota.id] || [], S.pedais).melhor;
+  return new GuiaRota(rota, melhor);
+}
+
 async function comecar(demo = false) {
   if (S.r || S.iniciando) return;
   if (!demo && NATIVO) {
@@ -388,6 +470,7 @@ async function comecar(demo = false) {
   S.demoAvisou = false;
   S.fonte = demo ? new FonteSimulada(20) : gps;
   S.r = new Rastreador({ autoPausa: S.cfg.autoPausa, precisaoMax: S.cfg.precisao }, S.fonte.agora());
+  S.guia = !demo && S.rotaEscolhida ? criarGuia(S.rotaEscolhida) : null;
   S.telaAcesa = !NATIVO && S.cfg.telaWeb;
   if (demo) S.fonte.iniciar(processar);
   else {
@@ -397,14 +480,13 @@ async function comecar(demo = false) {
     if (f && S.r.inicio - f.t < 1500) processar(f);
   }
   if (S.cfg.vibrar) vibrar('inicio');
-  if (S.cfg.voz) falar(demo ? 'Simulação iniciada.' : 'Gravando o pedal.');
+  if (S.cfg.voz) falar(demo ? 'Simulação iniciada.' : S.guia ? `Gravando. Rota ${nomeRota(S.guia.rota)}.` : 'Gravando o pedal.');
   aplicarTela();
   A.pedirPersistencia();
   iniciarRelogio();
   salvarAtivo();
   $('#parcial').textContent = avisosTxt();
-  mostrarTela('pedalar');
-  render();
+  mostrarTela('gravar');
 }
 
 function pararGravacao() {
@@ -413,7 +495,7 @@ function pararGravacao() {
   S.telaAcesa = false;
   if (NATIVO) chamar('Gravador', 'manterTela', { ligada: false }).catch(() => {});
   else soltarWake();
-  S.r = null; S.fonte = null; S.demo = false;
+  S.r = null; S.fonte = null; S.demo = false; S.guia = null; S.rotaEscolhida = null;
   desligarGPS();
 }
 
@@ -437,21 +519,24 @@ async function finalizar() {
   // O arquivo de leituras do Android só sai depois do pedal salvo
   if (salvo && NATIVO && !demo) gps.limpar();
   S.pedais.push(pedal);
+  atualizarRotas();
   if (S.cfg.vibrar) vibrar('fim');
   if (S.cfg.voz) falar(`Pedal finalizado. ${F.km1(pedal.distancia)} quilômetros.`);
-  render();
+  mostrarTela('inicio');
   abrirDetalhe(pedal);
 }
 
 // ---------- telas ----------
 function mostrarTela(nome) {
+  if (S.r && nome !== 'gravar') nome = 'gravar';
   if (nome === 'ajustes' && S.tela !== 'ajustes') S.telaAntes = S.tela;
   S.tela = nome;
-  for (const [t, id] of [['pedalar', '#telaPedalar'], ['historico', '#telaHistorico'], ['estatisticas', '#telaEstatisticas'], ['ajustes', '#telaAjustes']]) $(id).hidden = nome !== t;
+  for (const [t, id] of [['inicio', '#telaInicio'], ['rotas', '#telaRotas'], ['gravar', '#telaGravar'], ['voce', '#telaVoce'], ['ajustes', '#telaAjustes']]) $(id).hidden = nome !== t;
   document.body.classList.toggle('ajustes', nome === 'ajustes');
   $$('#abas button').forEach(b => { if (b.dataset.tela === nome) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
-  if (nome === 'pedalar') { aquecerGPS(); conferirPermissoes(); }
+  if (nome === 'gravar') { aquecerGPS(); conferirPermissoes(); }
   else if (!S.r) desligarGPS();
+  if (nome === 'inicio') conferirPermissoes();
   render();
   window.scrollTo(0, 0);
 }
@@ -460,30 +545,123 @@ function render() {
   document.body.classList.toggle('gravando', !!S.r);
   $('#pronto').hidden = !!S.r;
   $('#gravando').hidden = !S.r;
-  if (S.r) renderPainel();
-  else renderPronto();
-  if (S.tela === 'historico') renderHistorico();
-  if (S.tela === 'estatisticas') renderEstatisticas();
+  if (S.tela === 'inicio') renderInicio();
+  if (S.tela === 'rotas') renderRotas();
+  if (S.tela === 'gravar') { if (S.r) renderPainel(); else renderGravar(); }
+  if (S.tela === 'voce') renderVoce();
   if (S.tela === 'ajustes') renderAjustes();
 }
 
+// ----- Início -----
+function renderAlerta() {
+  const pend = pendenciaBolso();
+  const caixa = $('#alertaBolso');
+  caixa.hidden = !pend;
+  if (!pend) return;
+  $('#alertaTxt').textContent = pend.txt;
+  $('#alertaBtn').textContent = pend.btn;
+  $('#alertaBtn').onclick = pend.acao;
+}
+
+function cardAtividade(p) {
+  const manual = p.via === 'manual';
+  const dado = (k, v) => h('span', {}, h('i', { text: k }), h('b', { text: v, class: v === '--' ? 'nd' : null }));
+  const mapa = temTrajeto(p) ? h('canvas', { class: 'card-mapa', 'aria-label': 'Mapa do trajeto' }) : null;
+  const selos = selosPedal(p, false);
+  const card = h('button', { type: 'button', class: 'card', onclick: () => abrirDetalhe(p) },
+    h('span', { class: 'card-corpo' },
+      h('span', { class: 'card-topo' }, h('b', { text: tituloPedal(p) }), h('span', { text: quandoPedal(p) + (p.demo ? ' · demonstração' : '') })),
+      h('span', { class: 'card-dados' },
+        dado('Distância', `${F.km2(p.distancia)} km`),
+        dado('Tempo', p.tempoMov > 0 ? F.tempoCurto(p.tempoMov) : '--'),
+        manual ? dado('Vel. média', p.tempoMov > 0 ? `${F.kmh(p.distancia / p.tempoMov)} km/h` : '--') : dado('Elevação', `${F.inteiro(p.subida)} m`)),
+      selos.length ? h('span', { class: 'selos' }, selos) : null),
+    mapa);
+  if (mapa) quandoAparecer(mapa, () => desenharMapaPedal(mapa, p.pontos, (p.lacunas || []).map(l => l.i)));
+  return card;
+}
+
+function renderInicio() {
+  renderAlerta();
+  const ini = F.inicioSemana(Date.now());
+  const sem = F.somar(F.doPeriodo(S.pedais.filter(p => !p.demo), 'semana'));
+  $('#semPeriodo').textContent = `${F.diaMes(ini)} a ${F.diaMes(F.addDias(ini, 6))}`;
+  $('#semKm').textContent = `${F.km2(sem.distancia)} km`;
+  $('#semTempo').textContent = F.tempoCurto(sem.tempoMov);
+  $('#semSubida').textContent = `${F.inteiro(sem.subida)} m`;
+  const meta = S.cfg.metas.semana;
+  const caixa = $('#semMeta');
+  caixa.hidden = !meta;
+  if (meta) {
+    const m = avaliarMeta(S.pedais, 'semana', meta);
+    caixa.replaceChildren(anel(m.fracao, m.batida), h('span', {},
+      h('b', { text: m.batida ? 'Meta da semana batida!' : `Faltam ${valorMeta(m.falta, meta.tipo)} para a meta` }),
+      h('span', { text: `${valorMeta(m.feito, meta.tipo)} de ${valorMeta(m.alvo, meta.tipo)}` })));
+  }
+  const lista = S.pedais.slice().sort((a, b) => b.inicio - a.inicio).slice(0, 15);
+  $('#feed').replaceChildren(...(lista.length ? lista.map(cardAtividade) : [h('div', { class: 'vazio' },
+    h('p', { text: 'Nenhum pedal ainda. Toque em Gravar para o primeiro, ou faça uma simulação em Ajustes.' }),
+    h('button', { type: 'button', class: 'btn-pilula', text: 'Gravar', onclick: () => mostrarTela('gravar') }))]));
+  renderInstalar();
+}
+
+function renderInstalar() {
+  const instalado = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  let fechado = false;
+  try { fechado = localStorage.getItem('hodometro.instalarFechado') === '1'; } catch { /* sem acesso */ }
+  const caixa = $('#instalar');
+  caixa.hidden = NATIVO || instalado || fechado;
+  if (caixa.hidden) return;
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  $('#btnInstalar').hidden = !S.instalar;
+  $('#instalarTxt').textContent = S.instalar
+    ? 'Fica com ícone na tela inicial, abre em tela cheia e funciona sem internet.'
+    : ios
+      ? 'No Safari, toque em Compartilhar e depois em "Adicionar à Tela de Início". Assim ele abre em tela cheia e funciona sem internet.'
+      : 'No menu do navegador (⋮), toque em "Instalar app" ou "Adicionar à tela inicial". Assim ele abre em tela cheia e funciona sem internet.';
+}
+
+// ----- Rotas -----
+function cardRota(r) {
+  const e = estatisticasRota(S.tentativas[r.id] || [], S.pedais);
+  const dado = (k, v) => h('span', {}, h('i', { text: k }), h('b', { text: v, class: v === '--' ? 'nd' : null }));
+  const mapa = h('canvas', { class: 'card-mapa', 'aria-label': 'Mapa da rota' });
+  const card = h('button', { type: 'button', class: 'card', onclick: () => abrirRota(r) },
+    h('span', { class: 'card-corpo' },
+      h('span', { class: 'card-topo' }, h('b', { text: nomeRota(r) }), h('span', { text: `${F.km2(r.dist)} km · ${plural(e.vezes, 'vez', 'vezes')}${e.ultima ? ` · última ${emDia(e.ultima.inicio)}` : ''}` })),
+      h('span', { class: 'card-dados' },
+        dado('Melhor tempo', e.melhor ? F.duracao(e.melhor.tempoMov) : '--'),
+        dado('Tempo médio', e.media ? F.duracao(e.media) : '--'),
+        dado('Elevação', `${F.inteiro(r.subida)} m`))),
+    mapa);
+  quandoAparecer(mapa, () => desenharMapaPedal(mapa, r.linha));
+  return card;
+}
+
+function renderRotas() {
+  const lista = rotasVisiveis().sort((a, b) => (S.tentativas[b.id] || []).length - (S.tentativas[a.id] || []).length);
+  $('#listaRotas').replaceChildren(...(lista.length ? lista.map(cardRota) : [h('div', { class: 'vazio' },
+    h('p', { text: 'Nenhuma rota ainda. Quando você repetir um caminho, ele aparece aqui sozinho. Também dá para salvar qualquer pedal como rota, no resumo dele.' }))]));
+}
+
+// ----- Gravar -----
 function renderGps() {
   if (S.r) { renderPainel(); return; }
   const g = S.gps;
   const q = qualidade();
   $('#gpsCartao').dataset.q = q;
   const sat = g.usados != null && g.vistos != null && g.vistos > 0 ? g.usados : null;
-  const satTxt = sat != null ? `${sat} ${sat === 1 ? 'satélite' : 'satélites'} em uso` : null;
-  const semRede = NATIVO ? 'GPS do aparelho, sem internet.' : '';
+  const satTxt = sat != null ? plural(sat, 'satélite em uso', 'satélites em uso') : null;
+  const semRede = NATIVO ? 'sem internet' : '';
   const textos = {
-    desligado: ['Desligado', 'Ative para ver o sinal antes de sair.'],
-    buscando: ['Buscando', g.vistos ? `${g.vistos} satélites à vista, ${g.usados || 0} em uso. Fique num lugar aberto.` : 'Fique num lugar aberto. Leva de 10 segundos a 1 minuto.'],
-    excelente: ['Excelente', [satTxt, semRede].filter(Boolean).join(' · ') || 'Pode sair.'],
-    bom: ['Bom', [satTxt, semRede].filter(Boolean).join(' · ') || 'Pode sair.'],
-    bom2: ['Bom', satTxt ? `${satTxt}. Num lugar mais aberto fica ainda melhor.` : 'Num lugar mais aberto fica ainda melhor.'],
-    fraco: ['Fraco', `Pior que ${S.cfg.precisao} m: o app ignora essas leituras. Vá para um lugar aberto.`],
-    negado: ['Bloqueado', NATIVO ? 'Libere a localização precisa para o Hodômetro.' : 'Libere a localização para este site nas configurações do navegador.'],
-    indisponivel: ['GPS desligado', 'Ligue a localização do celular.'],
+    desligado: ['GPS desligado', 'Ative para ver o sinal antes de sair.'],
+    buscando: ['Buscando o GPS', g.vistos ? `${g.vistos} satélites à vista, ${g.usados || 0} em uso. Fique num lugar aberto.` : 'Fique num lugar aberto. Leva de 10 segundos a 1 minuto.'],
+    excelente: ['GPS excelente', [satTxt, semRede].filter(Boolean).join(' · ') || 'Pode sair.'],
+    bom: ['GPS bom', [satTxt, semRede].filter(Boolean).join(' · ') || 'Pode sair.'],
+    bom2: ['GPS bom', satTxt ? `${satTxt}. Num lugar mais aberto fica melhor.` : 'Num lugar mais aberto fica melhor.'],
+    fraco: ['GPS fraco', `Pior que ${S.cfg.precisao} m: o app ignora essas leituras. Vá para um lugar aberto.`],
+    negado: ['Localização bloqueada', NATIVO ? 'Libere a localização precisa para o app.' : 'Libere a localização para este site nas configurações do navegador.'],
+    indisponivel: ['Localização desligada', 'Ligue a localização do celular.'],
   };
   const [titulo, sub] = textos[q] || textos.desligado;
   $('#gpsTitulo').textContent = titulo;
@@ -492,13 +670,16 @@ function renderGps() {
   const btn = $('#btnGps');
   btn.hidden = !['desligado', 'negado', 'indisponivel'].includes(q);
   btn.textContent = q === 'desligado' ? 'Ativar GPS' : NATIVO && q === 'negado' ? 'Abrir ajustes' : NATIVO && q === 'indisponivel' ? 'Ligar a localização' : 'Tentar de novo';
+  if (!S.mapaVivo) $('#mapaVivoCaixa').classList.add('sem-mapa');
   $('#dicaComecar').textContent = ['excelente', 'bom', 'bom2'].includes(q) ? ''
     : 'Pode começar já. A gravação só conta a partir de um sinal bom.';
 }
 
 function renderChecklist() {
   const caixa = $('#checklist');
-  caixa.hidden = !NATIVO || !!S.r;
+  const p = S.perm;
+  const tudoOk = p.local === 'granted' && p.notif === 'granted' && p.bateria === true;
+  caixa.hidden = !NATIVO || !!S.r || tudoOk;
   if (caixa.hidden) return;
   const linha = (id, ok, txtOk, txtRuim, rotuloBtn, acao) => {
     const el = $(id);
@@ -510,7 +691,6 @@ function renderChecklist() {
     b.textContent = rotuloBtn;
     b.onclick = acao;
   };
-  const p = S.perm;
   linha('#chkLocal', p.local === 'granted', 'Liberada.',
     p.local === 'denied' ? 'Bloqueada. Em Permissões, escolha "Permitir durante o uso" e ligue "Usar local exato".' : 'O app pede quando você ativar o GPS.',
     p.local === 'denied' ? 'Abrir ajustes' : 'Liberar',
@@ -531,40 +711,39 @@ function avisosTxt() {
   return `Aviso por ${tipos.join(' e ')} a cada ${c.avisoKm} km${c.vibrar && temVibracao() ? ', e vibração quando pausa ou volta' : ''}.`;
 }
 
-function renderRapidos() {
+function renderGravar() {
+  renderGps();
+  renderChecklist();
   $('#qVoz').setAttribute('aria-pressed', String(!!S.cfg.voz));
   $('#qVoz').hidden = !temVoz();
   $('#qVibra').setAttribute('aria-pressed', String(!!S.cfg.vibrar));
   $('#qVibra').hidden = !temVibracao();
   $$('.seg button[data-km]').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.km) === S.cfg.avisoKm)));
   $('#qTxt').textContent = avisosTxt();
+  const rota = S.rotaEscolhida && S.rotas.find(r => r.id === S.rotaEscolhida);
+  if (S.rotaEscolhida && !rota) S.rotaEscolhida = null;
+  $('#btnEscolherRota').classList.toggle('ativa', !!rota);
+  $('#rotaEscolhidaTxt').textContent = rota ? `Rota: ${nomeRota(rota)}` : 'Sem rota';
+  if (rota) {
+    const e = estatisticasRota(S.tentativas[rota.id] || [], S.pedais);
+    $('#rotaEscolhidaSub').textContent = `${F.km2(rota.dist)} km${e.melhor ? ` · seu melhor: ${F.duracao(e.melhor.tempoMov)}` : ''}. Toque para trocar.`;
+  } else {
+    $('#rotaEscolhidaSub').textContent = rotasVisiveis().length ? 'Toque para seguir uma rota e correr contra o seu melhor tempo.' : 'Quando você repetir um caminho, dá para segui-lo aqui.';
+  }
 }
 
-function renderPronto() {
-  $('#hojeTxt').textContent = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
-  renderGps();
-  renderChecklist();
-  renderRapidos();
-  renderInstalar();
-  const ult = S.pedais.slice().sort((a, b) => b.inicio - a.inicio)[0];
-  $('#ultimoBloco').hidden = !ult;
-  if (ult) $('#ultimo').replaceChildren(cardPedal(ult));
-}
-
-function renderInstalar() {
-  const instalado = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
-  let fechado = false;
-  try { fechado = localStorage.getItem('hodometro.instalarFechado') === '1'; } catch { /* sem acesso */ }
-  const caixa = $('#instalar');
-  caixa.hidden = NATIVO || instalado || fechado;
-  if (caixa.hidden) return;
-  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
-  $('#btnInstalar').hidden = !S.instalar;
-  $('#instalarTxt').textContent = S.instalar
-    ? 'Fica com ícone na tela inicial, abre em tela cheia e funciona sem internet.'
-    : ios
-      ? 'No Safari, toque em Compartilhar e depois em "Adicionar à Tela de Início". Assim ele abre em tela cheia e funciona sem internet.'
-      : 'No menu do navegador (⋮), toque em "Instalar app" ou "Adicionar à tela inicial". Assim ele abre em tela cheia e funciona sem internet.';
+function escolherRota() {
+  const d = $('#dlgRotas');
+  const item = (r, sub) => h('button', {
+    type: 'button', class: 'opcao' + ((r ? r.id : null) === S.rotaEscolhida ? ' marcada' : ''),
+    onclick: () => { S.rotaEscolhida = r ? r.id : null; d.close(); renderGravar(); },
+  }, icone('rota'), h('span', {}, h('b', { text: r ? nomeRota(r) : 'Sem rota' }), h('span', { text: sub })));
+  $('#erLista').replaceChildren(item(null, 'Grava o pedal sem seguir um caminho.'),
+    ...rotasVisiveis().map(r => {
+      const e = estatisticasRota(S.tentativas[r.id] || [], S.pedais);
+      return item(r, `${F.km2(r.dist)} km · ${plural(e.vezes, 'vez', 'vezes')}${e.melhor ? ` · melhor ${F.duracao(e.melhor.tempoMov)}` : ''}`);
+    }));
+  if (typeof d.showModal === 'function') d.showModal();
 }
 
 function renderPainel() {
@@ -600,6 +779,20 @@ function renderPainel() {
   }
   $('#statusGps').textContent = partes.join(' · ');
 
+  // Rota sendo seguida
+  const g = S.guia;
+  $('#guia').hidden = !g;
+  if (g) {
+    $('#guiaNome').textContent = nomeRota(g.rota);
+    const dl = $('#guiaDelta');
+    dl.className = g.delta == null || Math.abs(g.delta) < 2 ? '' : g.delta < 0 ? 'frente' : 'atras';
+    dl.textContent = g.melhorTempo ? textoDelta(g.delta) : 'primeira vez';
+    $('#guiaBarra').style.width = `${(g.fracao * 100).toFixed(1)}%`;
+    $('#guiaTxt').textContent = g.concluida ? 'Rota concluída.'
+      : g.fora ? `Fora da rota, a ${Math.round(g.longe)} m do caminho.`
+        : `Faltam ${F.km2(g.falta)} km de ${F.km2(g.total)} km.`;
+  }
+
   const telaLigada = NATIVO ? S.telaAcesa : !!S.wake;
   $('#tTela').setAttribute('aria-pressed', String(S.telaAcesa));
   $('#tVoz').setAttribute('aria-pressed', String(!!S.cfg.voz));
@@ -610,11 +803,11 @@ function renderPainel() {
   const pausado = p.estado === 'pausado';
   const bp = $('#btnPausar');
   bp.classList.toggle('continuar', pausado);
-  bp.querySelector('span').textContent = pausado ? 'Continuar' : 'Pausar';
+  bp.querySelector('span').textContent = pausado ? 'Retomar' : 'Pausar';
   bp.querySelector('use').setAttribute('href', pausado ? '#i-play' : '#i-pausa');
 
   const avisoTela = $('#avisoTela');
-  avisoTela.classList.remove('alerta');
+  avisoTela.classList.remove('alerta-tela');
   if (S.demo) avisoTela.hidden = true;
   else if (NATIVO) {
     avisoTela.hidden = false;
@@ -623,116 +816,157 @@ function renderPainel() {
       : 'Pode bloquear a tela e guardar o celular no bolso. Os números ficam na notificação da tela de bloqueio.';
   } else if (S.telaAcesa && S.wakeFalhou) {
     avisoTela.hidden = false;
-    avisoTela.classList.add('alerta');
+    avisoTela.classList.add('alerta-tela');
     avisoTela.textContent = 'Este navegador não deixou manter a tela ligada. Aumente o tempo de tela do celular, senão o GPS para quando ela apagar.';
   } else if (!telaLigada) {
     avisoTela.hidden = false;
-    avisoTela.classList.add('alerta');
+    avisoTela.classList.add('alerta-tela');
     avisoTela.textContent = 'Tela livre para apagar. No navegador o GPS para com a tela apagada e o trecho entra em linha reta quando você voltar.';
   } else avisoTela.hidden = true;
 }
 
-const selo = t => h('span', { class: 'selo', text: t });
+// ----- Você -----
+const METRICAS = {
+  distancia: { titulo: 'Distância total', unid: 'km', conv: v => v / 1000, fmt: v => (v >= 100 ? F.inteiro(v) : F.km1(v * 1000)) },
+  tempo: { titulo: 'Tempo em movimento', unid: 'h', conv: v => v / 3600, fmt: v => (v >= 100 ? F.inteiro(v) : F.km1(v * 1000)) },
+  subida: { titulo: 'Elevação total', unid: 'm', conv: v => v, fmt: v => F.inteiro(v) },
+};
 
-function cardPedal(p) {
-  const manual = p.via === 'manual';
-  const dado = (k, v) => h('span', {}, h('i', { text: k }), h('b', { text: v, class: v === '--' ? 'nd' : null }));
-  const quando = manual && !p.horaInformada ? F.rotuloDia(p.inicio) : `${F.rotuloDia(p.inicio)} · ${F.hora(p.inicio)}`;
-  return h('button', { type: 'button', class: 'card', onclick: () => abrirDetalhe(p) },
-    h('span', { class: 'card-topo' },
-      h('b', {}, tituloPedal(p), p.demo ? selo('demo') : null, manual ? selo('sem GPS') : null),
-      h('span', { text: quando })),
-    h('span', { class: 'card-km' }, F.km2(p.distancia), h('small', { text: 'km' })),
-    h('span', { class: 'card-dados' },
-      dado('Movimento', p.tempoMov > 0 ? F.duracao(p.tempoMov) : '--'),
-      dado('Média', p.tempoMov > 0 ? F.kmh(p.distancia / p.tempoMov) : '--'),
-      dado('Máxima', manual ? '--' : F.kmh(p.velMax)),
-      dado('Subida', manual ? '--' : `${F.inteiro(p.subida)} m`)));
+function valorMeta(v, tipo) {
+  if (tipo === 'tempo') return F.horasLongas(v);
+  if (tipo === 'subida') return `${F.inteiro(v)} m`;
+  const km = v / 1000;
+  return `${km >= 100 || Math.abs(km - Math.round(km)) < 0.05 ? F.inteiro(km) : F.km1(v)} km`;
 }
 
-function renderHistorico() {
-  $('#histQtd').textContent = S.pedais.length ? `${S.pedais.length} ${S.pedais.length === 1 ? 'pedal' : 'pedais'}` : '';
+function renderVoce() {
+  $$('.abas-topo button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.sub === S.sub)));
+  $('#subProgresso').hidden = S.sub !== 'progresso';
+  $('#subAtividades').hidden = S.sub !== 'atividades';
+  if (S.sub === 'progresso') renderProgresso();
+  else renderAtividades();
+}
+
+function renderProgresso() {
+  $$('#chipsMetrica button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.metrica === S.metrica)));
+  $$('#chipsPeriodo button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.periodo === S.periodo)));
+  const m = METRICAS[S.metrica];
+  const pg = progresso(S.pedais, S.metrica, S.periodo);
+  $('#progTitulo').textContent = m.titulo;
+  $('#progTotal').textContent = m.fmt(m.conv(pg.total));
+  $('#progUnid').textContent = m.unid;
+  const vr = $('#progVar');
+  if (pg.variacao == null || !S.comparar) { vr.textContent = ''; vr.className = 'var'; }
+  else {
+    const pct = Math.round(Math.abs(pg.variacao) * 100);
+    vr.textContent = pct === 0 ? '= 0%' : `${pg.variacao > 0 ? '▲' : '▼'} ${pct}%`;
+    vr.className = 'var ' + (pg.variacao > 0 ? 'sobe' : pg.variacao < 0 ? 'desce' : '');
+  }
+  // Em 12 meses o período mostra mês e ano; nos outros, dia e mês
+  const rotPer = t => (S.periodo === 'ano' ? `${F.MESES[new Date(t).getMonth()].slice(0, 3)}/${String(new Date(t).getFullYear()).slice(2)}` : F.diaMes(new Date(t)));
+  $('#progPer').textContent = `${rotPer(pg.ini)} - hoje`;
+  $('#progAntCaixa').hidden = !S.comparar;
+  $('#progAnt').textContent = `${m.fmt(m.conv(pg.totalAnterior))} ${m.unid}`;
+  $('#progPerAnt').textContent = `${rotPer(pg.iniAnterior)} - ${rotPer(F.addDias(new Date(pg.ini), -1).getTime())}`;
+  $('#progLeitura').textContent = S.periodo === 'ano' ? 'Toque no gráfico para ver cada mês.' : 'Toque no gráfico para ver cada semana.';
+  $('#grafProgresso').replaceChildren(graficoProgresso(pg, { comparar: S.comparar, conv: m.conv, unid: m.unid, fmt: m.fmt, leitura: $('#progLeitura') }));
+  $('#btnComparar').setAttribute('aria-pressed', String(S.comparar));
+  $('#compararTxt').textContent = S.comparar ? `${PERIODOS[S.periodo].rotulo} anteriores` : `Comparar com os ${PERIODOS[S.periodo].rotulo} anteriores`;
+  $('#progResumo').textContent = resumoProgresso(pg);
+  renderMetas();
+  renderRecordes();
+  const validos = S.pedais.filter(p => !p.demo);
+  const tot = F.somar(validos);
+  const desde = validos.reduce((m2, p) => Math.min(m2, p.inicio), Infinity);
+  $('#estDesde').textContent = Number.isFinite(desde) ? `desde ${F.rotuloDia(desde)}` : '';
+  $('#estKm').textContent = `${F.km1(tot.distancia)} km`;
+  $('#estHoras').textContent = F.tempoCurto(tot.tempoMov);
+  $('#estN').textContent = String(tot.n);
+}
+
+function renderMetas() {
+  const nomes = { semana: 'Esta semana', mes: 'Este mês', ano: 'Este ano' };
+  const ate = { mes: 'até o fim do mês', ano: 'até o fim do ano' };
+  const itens = [];
+  for (const per of ['semana', 'mes', 'ano']) {
+    const meta = S.cfg.metas[per];
+    if (!meta) continue;
+    const m = avaliarMeta(S.pedais, per, meta);
+    const linhas = [h('span', { class: 'feito', text: `Concluído: ${valorMeta(m.feito, meta.tipo)} de ${valorMeta(m.alvo, meta.tipo)}` })];
+    if (m.batida) linhas.push(h('span', { text: 'Meta batida!' }));
+    else {
+      const ritmo = per === 'semana' || m.diasRestantes <= 10
+        ? ` em ${plural(m.diasRestantes, 'dia', 'dias')}`
+        : `: ${valorMeta(m.porSemana, meta.tipo)} por semana ${ate[per]}`;
+      linhas.push(h('span', { text: `Faltam ${valorMeta(m.falta, meta.tipo)}${ritmo}` }));
+      if (per !== 'semana' && m.projecao > 0) linhas.push(h('span', { text: `No ritmo de agora: ${valorMeta(m.projecao, meta.tipo)}` }));
+    }
+    itens.push(h('div', { class: 'meta-item' }, anel(m.fracao, m.batida), h('div', {}, h('b', { text: `${nomes[per]} · ${valorMeta(m.alvo, meta.tipo)}` }), ...linhas)));
+  }
+  $('#metas').replaceChildren(...(itens.length ? itens : [h('div', { class: 'vazio' },
+    h('p', { text: 'Defina metas de semana, mês e ano, em km, horas ou subida. O anel mostra quanto falta.' }),
+    h('button', { type: 'button', class: 'btn-pilula pequeno', text: 'Definir metas', onclick: abrirMetas }))]));
+}
+
+function renderRecordes() {
+  const r = F.recordes(S.pedais);
+  const abrir = id => () => { const p = S.pedais.find(x => x.id === id); if (p) abrirDetalhe(p); };
+  const rec = (k, v, unid, item, sub) => item
+    ? h('button', { type: 'button', onclick: abrir(item.id) }, h('span', { class: 'k', text: k }), h('span', { class: 'v' }, v, unid ? h('small', { text: unid }) : null), h('span', { class: 's', text: sub || F.rotuloDia(item.inicio) }))
+    : h('div', {}, h('span', { class: 'k', text: k }), h('span', { class: 'v nd', text: '--' }), h('span', { class: 's', text: 'ainda sem marca' }));
+  $('#recordes').replaceChildren(
+    rec('Maior pedal', r.maiorDistancia && F.km2(r.maiorDistancia.valor), 'km', r.maiorDistancia),
+    rec('Maior velocidade', r.maiorVel && F.kmh(r.maiorVel.valor), 'km/h', r.maiorVel),
+    rec('Maior média', r.maiorMedia && F.kmh(r.maiorMedia.valor), 'km/h', r.maiorMedia, r.maiorMedia && `${F.rotuloDia(r.maiorMedia.inicio)} · 5 km ou mais`),
+    rec('Melhor km', r.melhorKm && F.duracao(r.melhorKm.valor), '', r.melhorKm, r.melhorKm && `${F.rotuloDia(r.melhorKm.inicio)} · km ${r.melhorKm.km}`),
+    rec('Maior subida', r.maiorSubida && F.inteiro(r.maiorSubida.valor), 'm', r.maiorSubida));
+}
+
+function renderAtividades() {
   const meses = F.porMes(S.pedais);
   $('#lista').replaceChildren(...(meses.length ? meses.map(m => h('section', { class: 'mes' },
-    h('h3', {}, h('span', { text: m.rotulo }), h('span', { text: `${F.km1(m.pedais.reduce((a, p) => a + p.distancia, 0))} km` })),
-    h('div', { class: 'cards' }, m.pedais.map(cardPedal))))
-    : [h('div', { class: 'vazio' }, h('p', { text: 'Nenhum pedal ainda. Grave o primeiro na aba Pedalar ou faça uma simulação em Ajustes.' }))]));
+    h('h3', {}, h('span', { text: m.rotulo.charAt(0).toUpperCase() + m.rotulo.slice(1) }), h('span', { text: `${F.km1(m.pedais.reduce((a, p) => a + p.distancia, 0))} km · ${plural(m.pedais.length, 'pedal', 'pedais')}` })),
+    h('div', { class: 'feed' }, m.pedais.map(cardAtividade))))
+    : [h('div', { class: 'vazio' }, h('p', { text: 'Nenhum pedal ainda. Grave o primeiro na aba Gravar ou faça uma simulação em Ajustes.' }))]));
   const mData = $('#mData');
   mData.max = F.chaveDia(Date.now());
   if (!mData.value) mData.value = mData.max;
 }
 
-function renderEstatisticas() {
-  const e = F.estatisticas(S.pedais);
-  const n = x => `${x} ${x === 1 ? 'pedal' : 'pedais'}`;
-  $('#estDesde').textContent = e.desde ? `desde ${F.rotuloDia(e.desde)}` : '';
-  $('#estKm').textContent = F.km1(e.geral.distancia);
-  $('#estResumo').textContent = e.geral.n
-    ? `${n(e.geral.n)}${e.geral.tempoMov > 0 ? ` · média de ${F.kmh(e.geral.velMedia)} km/h em movimento` : ''}`
-    : 'Nenhum pedal ainda. Os totais aparecem aqui depois do primeiro.';
-  $('#estMesKm').textContent = F.km1(e.mes.distancia);
-  $('#estMesSub').textContent = e.mes.n ? `${n(e.mes.n)} · ${F.horasLongas(e.mes.tempoMov)}` : F.MESES[new Date().getMonth()];
-  $('#estSemKm').textContent = F.km1(e.semana.distancia);
-  $('#estSemSub').textContent = e.semana.n ? `${n(e.semana.n)} · ${F.horasLongas(e.semana.tempoMov)}` : 'segunda a domingo';
-  $('#estHoras').textContent = F.horasLongas(e.geral.tempoMov);
+function abrirMetas() {
+  const d = $('#dlgMetas');
+  for (const [per, id] of [['semana', 'mtSemana'], ['mes', 'mtMes'], ['ano', 'mtAno']]) {
+    const m = S.cfg.metas[per];
+    $('#' + id).value = m ? String(m.alvo).replace('.', ',') : '';
+    $('#' + id + 'Tipo').value = m ? m.tipo : 'distancia';
+  }
+  if (typeof d.showModal === 'function') d.showModal();
+}
 
-  // Semana
-  const dias = F.semana(S.pedais.filter(p => !p.demo));
-  const tot = dias.reduce((a, d) => a + d.distancia, 0);
-  $('#semTot').textContent = `${F.km1(tot)} km`;
-  const meta = $('#meta');
-  if (S.cfg.meta > 0) {
-    const pct = Math.min(100, tot / (S.cfg.meta * 1000) * 100);
-    const falta = S.cfg.meta * 1000 - tot;
-    meta.hidden = false;
-    meta.replaceChildren(
-      h('div', { class: 'meta-barra', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(Math.round(pct)), 'aria-label': 'Meta da semana' }, h('i', { style: `width:${pct}%` })),
-      h('p', { text: falta > 0 ? `${Math.round(pct)}% da meta de ${F.inteiro(S.cfg.meta)} km. Faltam ${F.km1(falta)} km.` : `Meta de ${F.inteiro(S.cfg.meta)} km batida.` }));
-  } else meta.hidden = true;
-  const hoje = F.chaveDia(Date.now());
-  const max = Math.max(5000, ...dias.map(d => d.distancia));
-  let iMax = 0; dias.forEach((d, i) => { if (d.distancia > dias[iMax].distancia) iMax = i; });
-  if (S.semSel && !dias.some(d => d.chave === S.semSel)) S.semSel = null;
-  $('#sem').replaceChildren(...dias.map((d, i) => {
-    const eHoje = d.chave === hoje, futuro = d.chave > hoje;
-    const mostra = d.distancia > 0 && (eHoje || i === iMax || d.chave === S.semSel);
-    const rotulo = `${F.DIAS[d.data.getDay()]} ${F.diaMes(d.data)}: ${F.km1(d.distancia)} km em ${n(d.n)}`;
-    return h('button', {
-      type: 'button', class: 'dia' + (eHoje ? ' hoje' : '') + (futuro ? ' futuro' : ''),
-      'aria-pressed': String(d.chave === S.semSel), 'aria-label': rotulo, title: rotulo,
-      onclick: () => { S.semSel = S.semSel === d.chave ? null : d.chave; renderEstatisticas(); },
-    },
-    h('span', { class: 'barea' }, d.distancia > 0 ? h('span', { class: 'bar', style: `height:${Math.max(3, d.distancia / max * 100)}%` }, mostra ? h('span', { class: 'v', text: F.km1(d.distancia) }) : null) : null),
-    h('span', { class: 'lbl' }, F.DIAS[d.data.getDay()], h('b', { text: String(d.data.getDate()) })));
-  }));
-  const sel = dias.find(d => d.chave === S.semSel);
-  $('#semCap').textContent = sel
-    ? `${F.DIAS[sel.data.getDay()]} ${F.diaMes(sel.data)}: ${F.km1(sel.distancia)} km em ${n(sel.n)}`
-    : S.pedais.length ? 'Toque num dia para ver o total.' : 'Seus km da semana aparecem aqui depois do primeiro pedal.';
-
-  // Recordes
-  const r = e.recordes;
-  const abrir = id => () => { const p = S.pedais.find(x => x.id === id); if (p) abrirDetalhe(p); };
-  const rec = (k, v, unid, item, sub, destaque) => item
-    ? h('button', { type: 'button', class: destaque ? 'destaque' : null, onclick: abrir(item.id) }, h('span', { class: 'k', text: k }), h('span', { class: 'v' }, v, unid ? h('small', { text: unid }) : null), h('span', { class: 's', text: sub || F.rotuloDia(item.inicio) }))
-    : h('div', {}, h('span', { class: 'k', text: k }), h('span', { class: 'v nd', text: '--' }), h('span', { class: 's', text: 'ainda sem marca' }));
-  $('#recordes').replaceChildren(
-    rec('Maior pedal', r.maiorDistancia && F.km2(r.maiorDistancia.valor), 'km', r.maiorDistancia, null, true),
-    rec('Maior velocidade', r.maiorVel && F.kmh(r.maiorVel.valor), 'km/h', r.maiorVel, null, true),
-    rec('Maior média', r.maiorMedia && F.kmh(r.maiorMedia.valor), 'km/h', r.maiorMedia, r.maiorMedia && `${F.rotuloDia(r.maiorMedia.inicio)} · 5 km ou mais`),
-    rec('Melhor km', r.melhorKm && F.duracao(r.melhorKm.valor), '', r.melhorKm, r.melhorKm && `${F.rotuloDia(r.melhorKm.inicio)} · km ${r.melhorKm.km}`),
-    rec('Maior subida', r.maiorSubida && F.inteiro(r.maiorSubida.valor), 'm', r.maiorSubida));
+function salvarMetas(ev) {
+  if (!ev.submitter || ev.submitter.value !== 'sim') return;
+  const novas = {};
+  for (const [per, id] of [['semana', 'mtSemana'], ['mes', 'mtMes'], ['ano', 'mtAno']]) {
+    const txt = $('#' + id).value.trim();
+    const v = txt ? parseNum(txt, 100000) : null;
+    if (txt && !v) { ev.preventDefault(); aviso('Use só números, por exemplo 30 ou 12,5.'); return; }
+    novas[per] = v ? { tipo: $('#' + id + 'Tipo').value, alvo: Math.round(v * 10) / 10 } : null;
+  }
+  S.cfg.metas = novas;
+  salvarCfg();
+  render();
+  aviso('Metas salvas.');
 }
 
 function renderAjustes() {
   $('#cfgAutoPausa').checked = S.cfg.autoPausa;
   $('#cfgTela').checked = S.cfg.telaWeb;
   $('#cfgPrecisao').value = String(S.cfg.precisao);
+  $('#cfgMapa').checked = !!S.cfg.mapa;
   $('#cfgVoz').checked = !!S.cfg.voz;
   $('#cfgVibra').checked = !!S.cfg.vibrar;
   $('#cfgAvisoKm').value = String(S.cfg.avisoKm);
   $('#cfgVozPausa').checked = !!S.cfg.vozPausa;
-  if (document.activeElement !== $('#cfgMeta')) $('#cfgMeta').value = S.cfg.meta ? String(S.cfg.meta).replace('.', ',') : '';
   $('#btnTestarVoz').hidden = !temVoz();
   $('#btnTestarVibra').hidden = !temVibracao();
   $('#btnDemo').disabled = !!S.r;
@@ -743,40 +977,76 @@ function renderAjustes() {
   $('#versao').textContent = NATIVO ? `Versão ${VERSAO} do app Android. Funciona sem internet.` : `Versão ${VERSAO}. Funciona offline depois de aberto uma vez.`;
 }
 
-// ---------- resumo do pedal ----------
+// ---------- telas por cima (resumo, rota, stories) ----------
+function abrirSobreposta(id) {
+  const el = $(id);
+  if (!S.pilha.includes(id)) {
+    S.pilha.push(id);
+    history.pushState({ sobre: id, nivel: S.pilha.length }, '');
+  }
+  el.style.zIndex = String(30 + S.pilha.indexOf(id));
+  el.hidden = false;
+  el.scrollTop = 0;
+  document.body.classList.add('sobre');
+  if (!S.r) desligarGPS();
+}
+function fecharSobreposta() {
+  const id = S.pilha.pop();
+  if (id) $(id).hidden = true;
+  if (id === '#detalhe') S.detalhe = null;
+  if (id === '#rotaDetalhe') S.rotaAberta = null;
+  if (id === '#story') S.story = null;
+  if (!S.pilha.length) {
+    document.body.classList.remove('sobre');
+    render();
+    aquecerGPS();
+  } else if (S.pilha[S.pilha.length - 1] === '#rotaDetalhe' && S.rotaAberta) abrirRota(S.rotaAberta, true);
+}
+
+/**
+ * Se a tela `id` já está aberta embaixo de outra, volta até ela e depois chama `fn`.
+ * Devolve true quando precisou voltar.
+ */
+function voltarAte(id, fn) {
+  const i = S.pilha.indexOf(id);
+  if (i < 0 || i === S.pilha.length - 1) return false;
+  S.depoisDeVoltar = fn;
+  history.go(-(S.pilha.length - 1 - i));
+  return true;
+}
+
+// ----- Atividade -----
 function abrirDetalhe(p) {
+  if (voltarAte('#detalhe', () => abrirDetalhe(p))) return;
   S.detalhe = p;
-  const d = $('#detalhe');
   const manual = p.via === 'manual';
   const fim = p.fim || p.inicio + (p.tempoTotal || 0) * 1000;
-  $('#dData').textContent = new Date(p.inicio).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
   $('#dTitulo').textContent = tituloPedal(p);
-  $('#dSub').textContent = manual
-    ? (p.horaInformada ? `Saída às ${F.hora(p.inicio)} · lançado à mão, sem trajeto` : 'Lançado à mão, sem trajeto')
-    : `${F.dataLonga(p.inicio)} · ${F.hora(p.inicio)} às ${F.hora(fim)}`;
-  $('#dSelo').replaceChildren(p.demo ? selo('demonstração') : manual ? selo('sem GPS') : '');
-  $('#dKm').textContent = F.km2(p.distancia);
-
-  const cel = (k, v, unid) => h('div', {}, h('span', { class: 'k', text: k }), v === '--'
+  $('#dSub').textContent = manual ? quandoPedal(p) : `${F.quandoLongo(p.inicio)} até ${F.hora(fim)}`;
+  $('#dSelo').replaceChildren();
+  const cel = (k, v, unid, destaque) => h('div', { class: destaque ? 'destaque' : null }, h('span', { class: 'k', text: k }), v === '--'
     ? h('span', { class: 'v nd', text: v })
     : h('span', { class: 'v' }, v, unid ? h('small', { text: unid }) : null));
   const media = p.tempoMov > 0 ? p.distancia / p.tempoMov : 0;
   const ritmo = p.distancia >= 50 && p.tempoMov > 0 ? p.tempoMov / (p.distancia / 1000) : null;
   const celulas = [
-    cel('Em movimento', p.tempoMov > 0 ? F.duracao(p.tempoMov) : '--'),
+    cel('Distância', F.km2(p.distancia), 'km', true),
+    cel('Tempo em movimento', p.tempoMov > 0 ? F.duracao(p.tempoMov) : '--', '', true),
     cel('Vel. média', p.tempoMov > 0 ? F.kmh(media) : '--', 'km/h'),
   ];
   if (!manual) {
     celulas.push(
       cel('Vel. máxima', F.kmh(p.velMax), 'km/h'),
-      cel('Elevação', F.inteiro(p.subida), 'm'),
+      cel('Ganho de elevação', F.inteiro(p.subida), 'm'),
       cel('Ritmo', F.ritmo(ritmo), '/km'),
-      cel('Tempo total', F.duracao(p.tempoTotal)));
+      cel('Tempo total', F.duracao(p.tempoTotal)),
+      cel('Pausas', String(p.pausas || 0), p.pausas ? `· ${F.tempoCurto(p.tempoPausas)}` : ''));
   } else celulas.push(cel('Ritmo', F.ritmo(ritmo), '/km'));
   $('#dNumeros').replaceChildren(...celulas);
-  $('#dMapa').hidden = manual;
-
-  const temPontos = (p.pontos || []).length > 2;
+  $('#dSelos').replaceChildren(...selosPedal(p));
+  const temPontos = temTrajeto(p);
+  const mapa = $('#dMapa');
+  mapa.hidden = !temPontos;
   $('#dGraficoBloco').hidden = !temPontos;
   if (temPontos) $('#dGrafico').replaceChildren(graficoVelocidade(p, $('#dLeitura')));
 
@@ -795,33 +1065,151 @@ function abrirDetalhe(p) {
         h('td', { text: l.rotulo }),
         h('td', { text: F.duracao(l.tempo) }),
         h('td', { class: 'num', text: F.kmh(vels[i]) }),
-        h('td', { class: 'barra' }, h('i', { style: `width:${Math.max(4, vels[i] / vMax * 100)}%` }))))));
+        h('td', { class: 'barra-p' }, h('i', { style: `width:${Math.max(4, vels[i] / vMax * 100)}%` }))))));
   }
 
   const notas = [];
   const lac = (p.lacunas || []).filter(l => l.dist > 0);
-  if (lac.length) notas.push(`Sem sinal em ${lac.length} ${lac.length === 1 ? 'trecho' : 'trechos'}: ${F.km2(lac.reduce((a, l) => a + l.dist, 0))} km somados em linha reta (tracejado no desenho).`);
-  if (p.demo) notas.push('Pedal de demonstração, feito pelo simulador. Não entra nas estatísticas.');
+  if (lac.length) notas.push(`Sem sinal em ${plural(lac.length, 'trecho', 'trechos')}: ${F.km2(lac.reduce((a, l) => a + l.dist, 0))} km somados em linha reta (tracejado no mapa).`);
+  if (p.demo) notas.push('Pedal de demonstração, feito pelo simulador. Não entra no progresso nem nas metas.');
   if (manual) notas.push('Lançado à mão: não entra nos recordes.');
   else if (p.nota) notas.push(`Nota: ${p.nota}`);
   $('#dNotas').textContent = notas.join(' ');
   $('#dNotas').hidden = !notas.length;
   $('#btnGpx').hidden = !temPontos;
+  const rota = rotaDoPedalId(p.id);
+  $('#btnSalvarRota').hidden = !temPontos || p.demo;
+  $('#btnSalvarRota').textContent = rota ? 'Ver a rota' : 'Salvar como rota';
 
-  const jaAberto = !d.hidden;
-  d.hidden = false;
-  d.scrollTop = 0;
-  document.body.classList.add('sobre');
-  if (!jaAberto) history.pushState({ detalhe: p.id }, '');
-  if (!manual) requestAnimationFrame(() => desenharTrajeto($('#dMapa'), p));
+  abrirSobreposta('#detalhe');
+  if (temPontos) requestAnimationFrame(() => desenharMapaPedal(mapa, p.pontos, (p.lacunas || []).map(l => l.i)));
 }
 
-function fecharDetalhe() {
-  $('#detalhe').hidden = true;
-  document.body.classList.remove('sobre');
-  S.detalhe = null;
-  render();
-  if (S.tela === 'pedalar') aquecerGPS();
+async function renomearPedal() {
+  const p = S.detalhe;
+  if (!p) return;
+  const nome = await pedirTexto('Nome do pedal', tituloPedal(p), 'Por exemplo: Lavrinha com a turma.');
+  if (nome == null) return;
+  if (nome) p.nome = nome.slice(0, 60);
+  else delete p.nome;
+  await A.salvarPedal(p);
+  $('#dTitulo').textContent = tituloPedal(p);
+  aviso('Nome salvo.');
+}
+
+async function salvarComoRota() {
+  const p = S.detalhe;
+  if (!p) return;
+  const ja = rotaDoPedalId(p.id);
+  if (ja) { abrirRota(ja); return; }
+  const r = rotaDoPedal(p, false);
+  if (!r) { aviso('Este pedal não tem trajeto suficiente para virar rota.'); return; }
+  const nome = await pedirTexto('Nome da rota', `Caminho de ${F.km1(r.dist)} km`, 'Por exemplo: Ida pra Lavrinha.');
+  if (nome == null) return;
+  r.nome = nome.slice(0, 60) || null;
+  S.rotas.push(r);
+  atualizarRotas();
+  salvarRotas();
+  $('#btnSalvarRota').textContent = 'Ver a rota';
+  $('#dSelos').replaceChildren(...selosPedal(p));
+  aviso('Rota salva. Para segui-la, escolha a rota em Gravar.');
+}
+
+// ----- Rota -----
+function abrirRota(r, soAtualizar = false) {
+  if (!soAtualizar && voltarAte('#rotaDetalhe', () => abrirRota(r))) return;
+  S.rotaAberta = r;
+  const e = estatisticasRota(S.tentativas[r.id] || [], S.pedais);
+  $('#rTitulo').textContent = nomeRota(r);
+  $('#rLinha').textContent = `${F.km2(r.dist)} km · ${plural(e.vezes, 'vez', 'vezes')} · ${F.inteiro(r.subida)} m de subida`;
+  const cel = (k, v, unid) => h('div', {}, h('span', { class: 'k', text: k }), v === '--' ? h('span', { class: 'v nd', text: v }) : h('span', { class: 'v' }, v, unid ? h('small', { text: unid }) : null));
+  $('#rNumeros').replaceChildren(
+    cel('Melhor tempo', e.melhor ? F.duracao(e.melhor.tempoMov) : '--'),
+    cel('Tempo médio', e.media ? F.duracao(e.media) : '--'),
+    cel('Vel. no melhor', e.melhor ? F.kmh(e.melhor.distancia / e.melhor.tempoMov) : '--', 'km/h'),
+    cel('Última vez', e.ultima ? F.rotuloDia(e.ultima.inicio) : '--'));
+  const pico = e.horas.reduce((m, v, i) => (v > e.horas[m] ? i : m), 0);
+  $('#rHorasTxt').textContent = e.vezes
+    ? `Você costuma sair entre ${pico}h e ${pico + 1}h. A barra laranja é a hora de agora.`
+    : 'Os horários aparecem depois da primeira vez nesta rota.';
+  $('#rHoras').replaceChildren(histogramaHoras(e.horas));
+  const ordem = e.pedais.filter(p => p.tempoMov > 0).sort((a, b) => a.tempoMov - b.tempoMov).map(p => p.id);
+  const medalha = ['ouro', 'prata', 'bronze'];
+  $('#rTentativas').replaceChildren(...(e.pedais.length ? e.pedais.slice().reverse().map(p => {
+    const pos = ordem.indexOf(p.id);
+    return h('button', { type: 'button', class: 'tentativa', onclick: () => abrirDetalhe(p) },
+      h('span', { class: 'pos ' + (pos >= 0 && pos < 3 ? medalha[pos] : ''), text: pos >= 0 ? `${pos + 1}º` : '-' }),
+      h('span', {}, h('b', { text: tituloPedal(p) }), h('span', { text: `${F.quandoLongo(p.inicio)} · ${F.kmh(p.tempoMov > 0 ? p.distancia / p.tempoMov : 0)} km/h` })),
+      h('b', { text: p.tempoMov > 0 ? F.duracao(p.tempoMov) : '--' }));
+  }) : [h('p', { class: 'hint', text: 'Ainda sem tentativas. Toque em Pedalar esta rota.' })]));
+  if (!soAtualizar) abrirSobreposta('#rotaDetalhe');
+  requestAnimationFrame(() => desenharMapaPedal($('#rMapa'), r.linha));
+}
+
+async function renomearRota() {
+  const r = S.rotaAberta;
+  if (!r) return;
+  const nome = await pedirTexto('Nome da rota', nomeRota(r), 'Por exemplo: Ida pra Lavrinha.');
+  if (nome == null) return;
+  r.nome = nome.slice(0, 60) || null;
+  r.auto = false;
+  salvarRotas();
+  $('#rTitulo').textContent = nomeRota(r);
+  aviso('Nome salvo.');
+}
+
+async function excluirRota() {
+  const r = S.rotaAberta;
+  if (!r) return;
+  const ok = await confirmar('Excluir esta rota?', `${nomeRota(r)} sai da lista. Os pedais continuam no histórico.`);
+  if (!ok) return;
+  // Fica guardada como oculta, para os mesmos pedais não criarem a rota de novo
+  r.oculta = true;
+  r.auto = false;
+  if (S.rotaEscolhida === r.id) S.rotaEscolhida = null;
+  salvarRotas();
+  history.back();
+  aviso('Rota excluída.');
+}
+
+// ----- Stories -----
+async function abrirStory(p) {
+  S.story = { pedal: p, modelo: 'laranja', foto: null };
+  abrirSobreposta('#story');
+  await renderStory();
+}
+async function renderStory() {
+  const st = S.story;
+  if (!st) return;
+  $$('#story [data-modelo]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.modelo === st.modelo)));
+  $('#btnFoto').hidden = st.modelo !== 'foto';
+  $('#storyDica').textContent = st.modelo === 'transparente'
+    ? 'Fundo transparente: no Instagram, cole por cima de uma foto sua.'
+    : st.modelo === 'foto' ? (st.foto ? 'Pronto. Troque a foto quando quiser.' : 'Escolha uma foto da galeria para o fundo.') : 'Pronto para os stories.';
+  await desenharStory($('#storyCanvas'), st.pedal, { modelo: st.modelo, foto: st.foto, nome: NOME_APP });
+}
+async function enviarStory() {
+  const st = S.story;
+  if (!st) return;
+  const canvas = $('#storyCanvas');
+  const nome = `pedal-${F.chaveDia(st.pedal.inicio)}.png`;
+  if (NATIVO) {
+    try {
+      const { uri } = await chamar('Filesystem', 'writeFile', { path: nome, data: pngBase64(canvas), directory: 'CACHE' });
+      await chamar('Share', 'share', { title: 'Meu pedal', files: [uri], dialogTitle: 'Compartilhar nos stories' });
+    } catch (e) { if (!/cancel/i.test(String(e && e.message))) aviso('Não consegui compartilhar a imagem. Tente de novo.'); }
+    return;
+  }
+  const blob = await new Promise(ok => canvas.toBlob(ok, 'image/png'));
+  const arquivo = new File([blob], nome, { type: 'image/png' });
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [arquivo] })) { await navigator.share({ files: [arquivo], title: 'Meu pedal' }); return; }
+  } catch (e) { if (e && e.name === 'AbortError') return; }
+  const url = URL.createObjectURL(blob);
+  const a = h('a', { href: url, download: nome });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  aviso('Imagem salva em Downloads.');
 }
 
 /**
@@ -863,7 +1251,7 @@ async function exportarGPX(p) {
 }
 
 async function compartilharResumo(p) {
-  const texto = F.resumoTexto(p, tituloPedal(p));
+  const texto = F.resumoTexto(p, tituloPedal(p), NOME_APP);
   if (NATIVO) {
     try { await chamar('Share', 'share', { title: 'Resumo do pedal', text: texto, dialogTitle: 'Compartilhar resumo' }); }
     catch (e) { if (!/cancel/i.test(String(e && e.message))) aviso('Não consegui abrir o compartilhar. Tente de novo.'); }
@@ -877,18 +1265,19 @@ async function compartilharResumo(p) {
 }
 
 async function excluirPedal(p) {
-  const ok = await confirmar('Excluir este pedal?', `${tituloPedal(p)}, ${F.km2(p.distancia)} km, ${F.rotuloDia(p.inicio)}. Ele sai do histórico e das estatísticas.`);
+  const ok = await confirmar('Excluir este pedal?', `${tituloPedal(p)}, ${F.km2(p.distancia)} km, ${F.rotuloDia(p.inicio)}. Ele sai do histórico, do progresso e das rotas.`);
   if (!ok) return;
   await A.apagarPedal(p.id);
   S.pedais = S.pedais.filter(x => x.id !== p.id);
+  atualizarRotas();
   history.back();
-  aviso('Pedal excluído.', 'Desfazer', async () => { await A.salvarPedal(p); S.pedais.push(p); render(); });
+  aviso('Pedal excluído.', 'Desfazer', async () => { await A.salvarPedal(p); S.pedais.push(p); atualizarRotas(); render(); });
 }
 
 // ---------- pedal de 24/10 ----------
 // Pedal de 24/10/2026 que não ficou gravado inteiro: a distância conhecida é a
-// da volta, 3,2 km. Esta versão pergunta uma vez o que lançar no histórico,
-// sem inventar trajeto nem tempo. Depois de respondido, não aparece mais.
+// da volta, 3,2 km. O app pergunta uma vez o que lançar no histórico, sem
+// inventar trajeto nem tempo. Depois de respondido, não aparece mais.
 const LANCAMENTO = { dia: '2026-10-24', metros: 3200, chave: 'hodometro.lancamento-20261024' };
 
 function oferecerLancamento() {
@@ -940,7 +1329,7 @@ async function salvarLancamento(ev) {
     try { localStorage.setItem(LANCAMENTO.chave, 'salvo'); } catch { /* ok */ }
     aviso(`${F.km2(p.distancia)} km lançados ${emDia(p.inicio)}.`);
     render();
-  } catch { aviso('Não consegui salvar. Tente de novo pelo Histórico.'); }
+  } catch { aviso('Não consegui salvar. Tente de novo em Você, Atividades.'); }
 }
 
 // ---------- eventos ----------
@@ -957,8 +1346,9 @@ function alternarVibracao() {
 
 function ligarEventos() {
   $$('#abas button').forEach(b => b.addEventListener('click', () => mostrarTela(b.dataset.tela)));
-  $('#btnAjustes').addEventListener('click', () => { mostrarTela('ajustes'); history.pushState({ ajustes: true }, ''); });
+  $$('[data-ajustes]').forEach(b => b.addEventListener('click', () => { mostrarTela('ajustes'); history.pushState({ ajustes: true }, ''); }));
   $('#btnFecharAjustes').addEventListener('click', () => history.back());
+  $$('[data-ir="voce-atividades"]').forEach(b => b.addEventListener('click', () => { S.sub = 'atividades'; mostrarTela('voce'); }));
   $('#btnGps').addEventListener('click', () => {
     const q = qualidade();
     if (NATIVO && q === 'negado') { gps.abrirAjustes('app'); return; }
@@ -966,6 +1356,7 @@ function ligarEventos() {
     S.gps.estado = 'procurando'; gps.parar(); ligarGPS(false);
   });
   $('#btnComecar').addEventListener('click', () => comecar(false));
+  $('#btnEscolherRota').addEventListener('click', escolherRota);
 
   // Avisos rápidos
   $('#qVoz').addEventListener('click', alternarVoz);
@@ -989,7 +1380,15 @@ function ligarEventos() {
     renderPainel();
     atualizarNotificacao(true);
   });
-  segurarPara($('#btnFinalizar'), 1500, () => { if (S.cfg.vibrar) vibrar('toque'); finalizar(); });
+  segurarPara($('#btnFinalizar'), 1500, () => { if (S.cfg.vibrar) vibrar('toque'); finalizar(); }, 'Segure o botão escuro por 1,5 segundo para finalizar.');
+
+  // Você
+  $$('.abas-topo button').forEach(b => b.addEventListener('click', () => { S.sub = b.dataset.sub; renderVoce(); }));
+  $$('#chipsMetrica button').forEach(b => b.addEventListener('click', () => { S.metrica = b.dataset.metrica; renderProgresso(); }));
+  $$('#chipsPeriodo button').forEach(b => b.addEventListener('click', () => { S.periodo = b.dataset.periodo; renderProgresso(); }));
+  $('#btnComparar').addEventListener('click', () => { S.comparar = !S.comparar; renderProgresso(); });
+  $('#btnMetas').addEventListener('click', abrirMetas);
+  $('#formMetas').addEventListener('submit', salvarMetas);
 
   $('#btnInstalar').addEventListener('click', async () => {
     if (!S.instalar) return;
@@ -1025,17 +1424,11 @@ function ligarEventos() {
   $('#cfgAutoPausa').addEventListener('change', e => { S.cfg.autoPausa = e.target.checked; salvarCfg(); if (S.r) aviso('Vale a partir do próximo pedal.'); });
   $('#cfgTela').addEventListener('change', e => { S.cfg.telaWeb = e.target.checked; salvarCfg(); });
   $('#cfgPrecisao').addEventListener('change', e => { S.cfg.precisao = Number(e.target.value); salvarCfg(); if (S.r) aviso('Vale a partir do próximo pedal.'); });
+  $('#cfgMapa').addEventListener('change', e => { S.cfg.mapa = e.target.checked; S.mapaVivo = null; salvarCfg(); });
   $('#cfgVoz').addEventListener('change', e => { S.cfg.voz = e.target.checked; salvarCfg(); });
   $('#cfgVibra').addEventListener('change', e => { S.cfg.vibrar = e.target.checked; salvarCfg(); if (S.cfg.vibrar) vibrar('km'); });
   $('#cfgAvisoKm').addEventListener('change', e => { S.cfg.avisoKm = Number(e.target.value); salvarCfg(); });
   $('#cfgVozPausa').addEventListener('change', e => { S.cfg.vozPausa = e.target.checked; salvarCfg(); });
-  $('#cfgMeta').addEventListener('change', e => {
-    const v = parseNum(e.target.value, 5000);
-    S.cfg.meta = v ? Math.round(v * 10) / 10 : 0;
-    salvarCfg();
-    renderAjustes();
-    aviso(S.cfg.meta ? `Meta da semana: ${F.inteiro(S.cfg.meta)} km.` : 'Meta desligada.');
-  });
   $('#btnTestarVoz').addEventListener('click', () => {
     if (!falar(F.falaKm(5, 192, 5.4))) aviso('Este navegador não tem voz.');
   });
@@ -1050,7 +1443,7 @@ function ligarEventos() {
   $('#btnDemo').addEventListener('click', () => { history.back(); setTimeout(() => comecar(true), 50); });
 
   $('#btnBackup').addEventListener('click', async () => {
-    const dados = { app: 'hodometro', versao: 1, exportadoEm: new Date().toISOString(), ajustes: S.cfg, pedais: S.pedais };
+    const dados = { app: 'hodometro', versao: 2, exportadoEm: new Date().toISOString(), ajustes: S.cfg, pedais: S.pedais, rotas: S.rotas };
     const r = await entregarArquivo(JSON.stringify(dados), `hodometro-backup-${F.chaveDia(Date.now())}.json`, 'application/json');
     if (r === 'baixado') aviso('Backup salvo em Downloads.');
   });
@@ -1065,35 +1458,83 @@ function ligarEventos() {
       const validos = lista.filter(p => p && typeof p.id === 'string' && Number.isFinite(p.inicio) && Number.isFinite(p.distancia));
       for (const p of validos) await A.salvarPedal(p);
       S.pedais = await A.listarPedais();
+      const rotas = Array.isArray(dados.rotas) ? dados.rotas.filter(r => r && r.id && !S.rotas.some(x => x.id === r.id)) : [];
+      atualizarRotas([...S.rotas, ...rotas]);
+      salvarRotas();
       render();
-      aviso(`${validos.length} ${validos.length === 1 ? 'pedal importado' : 'pedais importados'}.`);
+      aviso(`${plural(validos.length, 'pedal importado', 'pedais importados')}.`);
     } catch {
-      aviso('Não consegui ler esse arquivo. Escolha um backup exportado pelo Hodômetro.');
+      aviso('Não consegui ler esse arquivo. Escolha um backup exportado pelo app.');
     }
   });
   $('#btnApagarTudo').addEventListener('click', async () => {
     if (!S.pedais.length) { aviso('Não há pedais para apagar.'); return; }
-    const ok = await confirmar('Apagar todos os pedais?', `${S.pedais.length} ${S.pedais.length === 1 ? 'pedal sai' : 'pedais saem'} deste celular. Exporte um backup antes se quiser guardar.`, 'Apagar tudo');
+    const ok = await confirmar('Apagar todos os pedais?', `${plural(S.pedais.length, 'pedal sai', 'pedais saem')} deste celular, junto com as rotas. Exporte um backup antes se quiser guardar.`, 'Apagar tudo');
     if (!ok) return;
     await A.apagarTodos();
     S.pedais = [];
+    S.rotas = [];
+    S.tentativas = {};
+    salvarRotas();
     render();
     aviso('Todos os pedais foram apagados.');
   });
 
-  // Resumo
+  // Atividade
   $('#btnVoltar').addEventListener('click', () => history.back());
-  window.addEventListener('popstate', () => {
-    if (!$('#detalhe').hidden) fecharDetalhe();
-    else if (S.tela === 'ajustes') mostrarTela(S.telaAntes === 'ajustes' ? 'pedalar' : S.telaAntes);
-  });
+  $('#btnRenomear').addEventListener('click', renomearPedal);
+  $('#btnStory').addEventListener('click', () => S.detalhe && abrirStory(S.detalhe));
+  $('#btnStoryTopo').addEventListener('click', () => S.detalhe && abrirStory(S.detalhe));
   $('#btnGpx').addEventListener('click', () => S.detalhe && exportarGPX(S.detalhe));
   $('#btnCompartilhar').addEventListener('click', () => S.detalhe && compartilharResumo(S.detalhe));
+  $('#btnSalvarRota').addEventListener('click', salvarComoRota);
   $('#btnApagar').addEventListener('click', () => S.detalhe && excluirPedal(S.detalhe));
-  window.addEventListener('resize', () => { if (S.detalhe && S.detalhe.via !== 'manual') desenharTrajeto($('#dMapa'), S.detalhe); });
+
+  // Rota
+  $('#btnVoltarRota').addEventListener('click', () => history.back());
+  $('#btnRenomearRota').addEventListener('click', renomearRota);
+  $('#btnApagarRota').addEventListener('click', excluirRota);
+  $('#btnPedalarRota').addEventListener('click', () => {
+    const r = S.rotaAberta;
+    if (!r) return;
+    S.rotaEscolhida = r.id;
+    // Fecha o que está por cima e vai para o Gravar
+    S.depoisDeFechar = () => { mostrarTela('gravar'); aviso(`Rota escolhida: ${nomeRota(r)}. Toque em Iniciar quando estiver pronto.`); };
+    history.go(-S.pilha.length);
+  });
+
+  // Stories
+  $('#btnFecharStory').addEventListener('click', () => history.back());
+  $$('#story [data-modelo]').forEach(b => b.addEventListener('click', () => { if (S.story) { S.story.modelo = b.dataset.modelo; renderStory(); } }));
+  $('#arqFoto').addEventListener('change', async e => {
+    const arq = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!arq || !S.story) return;
+    try {
+      const img = new Image();
+      img.src = URL.createObjectURL(arq);
+      await img.decode();
+      S.story.foto = img;
+      renderStory();
+    } catch { aviso('Não consegui abrir essa foto. Tente outra.'); }
+  });
+  $('#btnEnviarStory').addEventListener('click', enviarStory);
+
+  // Voltar (do Android ou do app): fecha as telas por cima até o nível da entrada do histórico
+  window.addEventListener('popstate', e => {
+    const st = e.state || {};
+    const nivel = st.nivel || 0;
+    while (S.pilha.length > nivel) fecharSobreposta();
+    if (!S.pilha.length && S.tela === 'ajustes' && !st.ajustes) mostrarTela(S.telaAntes === 'ajustes' ? 'inicio' : S.telaAntes);
+    const depois = S.depoisDeVoltar || (!S.pilha.length && S.depoisDeFechar);
+    if (depois) { S.depoisDeVoltar = null; if (!S.pilha.length) S.depoisDeFechar = null; depois(); }
+  });
+  window.addEventListener('resize', () => {
+    if (S.detalhe && temTrajeto(S.detalhe)) desenharMapaPedal($('#dMapa'), S.detalhe.pontos, (S.detalhe.lacunas || []).map(l => l.i));
+  });
 
   // GPS: o cartão mostra "Buscando" se a última leitura ficou velha
-  setInterval(() => { if (!S.r && S.tela === 'pedalar' && !document.hidden) renderGps(); }, 2000);
+  setInterval(() => { if (!S.r && S.tela === 'gravar' && !document.hidden) renderGps(); }, 2000);
 
   // Ciclo de vida
   document.addEventListener('visibilitychange', () => {
@@ -1141,19 +1582,26 @@ function registrarSW() {
 
 // ---------- início ----------
 async function iniciar() {
+  $$('[data-nome-app]').forEach(el => { el.textContent = NOME_APP; });
   ligarEventos();
   try { S.pedais = await A.listarPedais(); } catch { S.pedais = []; }
-  let recuperou = false;
+  await carregarRotas();
+  let recuperou = false, guiaSalva = null;
   try {
     const ativo = await A.lerEstado('ativo');
     if (ativo && ativo.r) {
       S.r = Rastreador.deJSON(ativo.r);
       S.fonte = gps;
       S.demo = false;
+      guiaSalva = ativo.guia || null;
       recuperou = true;
     }
   } catch { /* começa limpo */ }
   if (recuperou) {
+    if (guiaSalva) {
+      S.guia = criarGuia(guiaSalva.id);
+      if (S.guia) Object.assign(S.guia, { feito: guiaSalva.feito || 0, i: guiaSalva.i || 0, fora: !!guiaSalva.fora, concluida: !!guiaSalva.concluida });
+    }
     // O pedal continuava gravando: liga de novo o GPS e puxa o que o Android gravou sozinho.
     // As leituras novas esperam na fila até as antigas entrarem.
     ligarGPS(true, false);
@@ -1163,8 +1611,8 @@ async function iniciar() {
     aviso(n > 0
       ? `Pedal em andamento recuperado, com ${n} leituras que o Android gravou com o app fechado.`
       : NATIVO ? 'Pedal em andamento recuperado. Pode seguir.' : 'Pedal em andamento recuperado. O trecho com o app fechado entra em linha reta.', null, null, 7000);
-  }
-  mostrarTela('pedalar');
+    mostrarTela('gravar');
+  } else mostrarTela('inicio');
   registrarSW();
   if (!S.r) setTimeout(oferecerLancamento, 600);
 }

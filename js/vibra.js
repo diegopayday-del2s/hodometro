@@ -9,6 +9,7 @@ export const PADROES = Object.freeze({
   retomou: [120, 90, 120, 90, 120],    // três toques curtos
   inicio: [200],
   fim: [500, 150, 500],
+  fora: [600, 200, 600, 200, 600],     // saiu da rota: três toques longos
   toque: [30],
 });
 
