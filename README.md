@@ -1,10 +1,14 @@
 # Hodômetro
 
-Ciclocomputador no celular. Grava o pedal pelo GPS com a tela bloqueada e o
-celular no bolso, sem internet e sem sinal de operadora. Mostra distância,
-velocidade atual, média e máxima, tempo em movimento e tempo total, ritmo por km,
-pausas, parciais e ganho de elevação. Não tem servidor nem conta: os pedais
-ficam guardados no próprio celular.
+App de pedal no celular. Grava pelo GPS com a tela bloqueada e o celular no
+bolso, sem internet e sem sinal de operadora. Mostra distância, velocidade atual,
+média e máxima, tempo em movimento e tempo total, ritmo por km, pausas, parciais
+e ganho de elevação. Tem progresso com comparação, metas, rotas que você repete
+(com seu melhor tempo) e imagem para os stories. Não tem servidor nem conta: os
+pedais ficam guardados no próprio celular.
+
+O nome "Hodômetro" é provisório. A apresentação do app para escolher o nome está
+em `docs/apresentacao.md`, com a lista de arquivos onde o nome aparece.
 
 Existe em duas formas: o **app Android** (recomendado, grava com a tela apagada)
 e a **versão web** (PWA), que precisa da tela ligada.
@@ -45,9 +49,15 @@ Guarde essa senha num lugar seguro: sem ela, uma versão nova não instala por c
 
 ## Usar
 
-- **Antes de sair:** o cartão **Sinal do GPS** mostra Buscando, Fraco, Bom ou
-  Excelente, a precisão em metros e os satélites em uso. Num lugar aberto leva de
-  10 segundos a 1 minuto.
+O app tem quatro abas: **Início**, **Rotas**, **Gravar** e **Você**. A engrenagem
+no topo abre os Ajustes.
+
+- **Início:** resumo da semana (distância, tempo e elevação), a meta da semana e
+  as atividades em cartões com o mapa do trajeto.
+- **Gravar:** mapa com a sua posição (quando tem internet), o cartão **Sinal do
+  GPS** (Buscando, Fraco, Bom ou Excelente, com a precisão em metros e os
+  satélites em uso), o que falta liberar para gravar no bolso, a rota a seguir e
+  os avisos. O botão redondo laranja começa o pedal.
 - **Começar pedal:** pode bloquear a tela e guardar o celular. No topo do painel,
   o sol liga o **modo guidão** (tela sempre acesa, para usar no suporte da bike).
 - **Painel:** distância e velocidade em destaque; embaixo, tempo em movimento,
@@ -61,18 +71,28 @@ Guarde essa senha num lugar seguro: sem ela, uma versão nova não instala por c
 - **Pausar:** para quando você quer descer da bike e andar sem contar.
 - **Finalizar:** segure o botão vermelho por 1,5 segundo, com a barra enchendo.
   Toque rápido não encerra, para não acabar o pedal sem querer no bolso.
-- **Histórico:** cada pedal num cartão com data, hora, distância, tempo em
-  movimento, média, máxima e subida. Tocando, abre o resumo completo (bom para
-  print), com desenho do trajeto, gráfico de velocidade e parciais. Dali dá para
-  compartilhar o resumo em texto, exportar GPX (o Strava importa em "Enviar
-  atividade") ou excluir, com confirmação.
-- **Estatísticas:** km no total, no mês e na semana, horas pedaladas, gráfico da
-  semana, meta e recordes pessoais (maior pedal, maior velocidade, maior média,
-  melhor km e maior subida).
-- **Ajustes** (engrenagem na tela inicial): pausa automática, precisão do GPS,
-  avisos, bateria, meta, backup e demonstração.
-- **Lançar pedal sem GPS:** no fim do Histórico, para um pedal que não foi
-  gravado. O tempo é opcional.
+- **Atividade:** tocando num cartão abre o resumo com o mapa, os números, as
+  marcas (rota, melhor tempo, recordes), o gráfico de velocidade e as parciais.
+  O lápis muda o nome do pedal. Dali dá para compartilhar nos stories, mandar o
+  resumo em texto, exportar GPX (o Strava importa em "Enviar atividade"), salvar
+  o caminho como rota ou excluir, com confirmação.
+- **Stories:** imagem de 1080 x 1920 com distância, subida, tempo e o desenho do
+  trajeto. Modelos: laranja, com uma foto da galeria ou transparente (para colar
+  por cima de uma foto no Instagram).
+- **Rotas:** quando você faz o mesmo caminho duas vezes, ele vira rota sozinho.
+  Cada rota mostra quantas vezes você fez, melhor tempo, tempo médio, os horários
+  em que costuma sair e todas as tentativas com medalha para as 3 melhores.
+  **Pedalar esta rota** grava mostrando quanto falta, se você saiu do caminho e
+  quantos segundos está à frente ou atrás do seu melhor tempo (também por voz).
+- **Você, Progresso:** distância, tempo ou elevação nas últimas 4 semanas, 3
+  meses ou 12 meses, com a linha do período anterior para comparar e a frase do
+  resumo ("sua distância aumentou 12%"). Embaixo, metas de semana, mês e ano em
+  km, horas ou subida (quanto falta, quanto precisa por semana e onde você chega
+  no ritmo de agora), recordes pessoais e os totais desde o começo.
+- **Você, Atividades:** todos os pedais por mês e o **Lançar pedal sem GPS**, para
+  um pedal que não foi gravado (o tempo é opcional).
+- **Ajustes:** pausa automática, precisão do GPS, mapa de fundo, avisos, bateria,
+  backup e demonstração.
 - **Backup:** em Ajustes. Como tudo fica no celular, exporte de vez em quando.
 
 ## Como calcula
@@ -97,6 +117,16 @@ O motor fica em `js/rastreador.js` e não depende da tela. Os passos:
 8. Túnel ou sinal perdido: quando o sinal volta, o trecho entra em linha reta e
    fica tracejado no desenho. O tempo em movimento do trecho sai da sua média.
 
+**Rotas** (`js/rotas.js`): cada pedal vira uma linha com um ponto a cada 50 m.
+Dois pedais são a mesma rota quando saem e chegam a menos de 200 m, têm distância
+parecida (15%) e 85% de cada caminho fica a menos de 60 m do outro. Ida e volta
+são rotas diferentes. Durante o pedal, a comparação com o melhor tempo usa o
+tempo em movimento, sem as paradas.
+
+**Mapa:** os blocos do mapa vêm do CARTO (dados do OpenStreetMap) quando tem
+internet. É só o fundo: a gravação, as rotas e os números nunca dependem dele.
+Sem internet aparece o desenho do trajeto, como antes.
+
 Precisão nos testes com pedais simulados (tremido de 4 m, como um celular comum;
 retas, semáforos, curvas, esquinas e um pedal de cidade de 6 km, 10 repetições
 cada, com e sem perda de 20% das leituras). Para ver a tabela completa: `npm run precisao`.
@@ -111,6 +141,7 @@ cada, com e sem perda de 20% das leituras). Para ver a tabela completa: `npm run
 - **Versão web:** o navegador para o GPS quando a tela apaga. Por isso ela mantém
   a tela ligada. Para o bolso, use o app Android.
 - **Subida:** vem da altitude do GPS, que varia bastante. É estimativa.
+- **Mapa:** precisa de internet. Sem ela, fica o desenho do trajeto.
 - **Voz sem internet:** usa a voz do Android. Se ela não falar offline, abra
   Configurações > Gerenciamento geral > Conversão de texto em voz e baixe o
   português do Brasil.
@@ -148,8 +179,15 @@ Capacitor só como casca, mais o plugin `Gravador` escrito no próprio projeto.
 
 ```
 index.html            telas
-css/app.css           visual (tokens de cor no topo, tema escuro OLED)
+css/app.css           visual (tokens de cor no topo, tema claro e laranja)
 js/app.js             controle das telas, GPS, gravação, avisos, exportação
+js/marca.js           nome do app (um lugar só)
+js/progresso.js       progresso por semana ou mês e metas (sem DOM, testado)
+js/rotas.js           rotas repetidas e guia durante o pedal (sem DOM, testado)
+js/mapa.js            blocos de mapa atrás do trajeto, quando tem internet
+js/story.js           imagem para os stories
+js/graficos.js        gráfico de progresso, horas de atividade e anéis de meta
+js/ui.js              peças de tela: avisos, diálogos, botão de segurar
 js/rastreador.js      motor de cálculo (sem DOM, testado)
 js/geo.js             distância (haversine), projeção e filtros de Kalman
 js/simulador.js       gera leituras falsas de GPS para testes e demonstração
@@ -200,10 +238,13 @@ ler o `AGENTS.md` antes de começar.
 ## Ideias dos apps pagos
 
 Já está no app (inspirado em Strava, Ride with GPS, Cyclemeter, MapMyRide e nos
-ciclocomputadores Garmin e Wahoo): pausa automática com tempo em movimento
-separado do total, parciais por km, aviso por voz e por vibração, notificação ao
-vivo na tela de bloqueio, modo guidão, velocidade máxima, subida, recordes
-pessoais, meta semanal, exportação GPX e recuperação do pedal se o app fechar no meio.
+ciclocomputadores Garmin e Wahoo): feed de atividades com mapa, progresso com
+comparação ao período anterior, metas de semana, mês e ano, rotas reconhecidas
+sozinhas com melhor tempo e horários, pedalar contra o seu melhor tempo, imagem
+para os stories, pausa automática com tempo em movimento separado do total,
+parciais por km, aviso por voz e por vibração, notificação ao vivo na tela de
+bloqueio, modo guidão, recordes pessoais, exportação GPX e recuperação do pedal
+se o app fechar no meio.
 
 Próximos passos possíveis:
 
