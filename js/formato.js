@@ -59,10 +59,10 @@ export function duracaoFalada(s) {
   return p.length > 1 ? p.slice(0, -1).join(', ') + ' e ' + p[p.length - 1] : p[0];
 }
 
-/** Texto do aviso por voz a cada km. */
+/** Texto do aviso por voz a cada km: distância, média e tempo do último km. */
 export function falaKm(kmFeitos, tempoKm, mediaMs) {
   const nome = kmFeitos === 1 ? '1 quilômetro' : `${kmFeitos} quilômetros`;
-  return `${nome}. Último quilômetro em ${duracaoFalada(tempoKm)}. Média de ${kmh(mediaMs)} quilômetros por hora.`;
+  return `${nome}. Média de ${kmh(mediaMs)} quilômetros por hora. Último quilômetro em ${duracaoFalada(tempoKm)}.`;
 }
 
 export const hora = t => { const d = new Date(t); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
@@ -102,8 +102,13 @@ export function doPeriodo(pedais, periodo, agora = Date.now()) {
 
 export function somar(pedais) {
   const t = { n: pedais.length, distancia: 0, tempoMov: 0, subida: 0 };
-  for (const p of pedais) { t.distancia += p.distancia || 0; t.tempoMov += p.tempoMov || 0; t.subida += p.subida || 0; }
-  t.velMedia = t.tempoMov > 0 ? t.distancia / t.tempoMov : 0;
+  let distComTempo = 0;
+  for (const p of pedais) {
+    t.distancia += p.distancia || 0; t.tempoMov += p.tempoMov || 0; t.subida += p.subida || 0;
+    if (p.tempoMov > 0) distComTempo += p.distancia || 0;
+  }
+  // Pedal lançado sem tempo não entra na média
+  t.velMedia = t.tempoMov > 0 ? distComTempo / t.tempoMov : 0;
   return t;
 }
 
@@ -147,4 +152,55 @@ export function porMes(pedais) {
     grupos.get(chave).pedais.push(p);
   }
   return [...grupos.values()];
+}
+
+/** Totais para a aba Estatísticas: geral, mês e semana, horas e recordes. */
+export function estatisticas(pedais, agora = Date.now()) {
+  const validos = pedais.filter(p => !p.demo);
+  return {
+    geral: somar(validos),
+    mes: somar(doPeriodo(validos, 'mes', agora)),
+    semana: somar(doPeriodo(validos, 'semana', agora)),
+    recordes: recordes(validos),
+    desde: validos.length ? Math.min(...validos.map(p => p.inicio)) : null,
+  };
+}
+
+/** Segundos em "62 h 15 min" para totais longos. */
+export function horasLongas(s) {
+  const m = Math.floor(Math.max(0, s || 0) / 60);
+  const h = Math.floor(m / 60);
+  return h ? `${h} h ${pad(m % 60)} min` : `${m} min`;
+}
+
+/** Título e texto da notificação do pedal em andamento (tela de bloqueio). */
+export function textoNotificacao(p) {
+  const titulo = `${kmAoVivo(p.distancia)} km  ·  ${kmh(p.velAtual)} km/h`;
+  const mov = `Em movimento ${duracao(p.tempoMov)}`;
+  const media = p.tempoMov > 0 ? ` · média ${kmh(p.velMedia)} km/h` : '';
+  let texto;
+  if (p.estado === 'aguardando') texto = 'Procurando o sinal do GPS.';
+  else if (p.estado === 'pausado') texto = `Pausado · ${mov}`;
+  else if (p.estado === 'parado') texto = p.distancia > 0 ? `Pausa automática · ${mov}` : 'GPS pronto. Pode sair pedalando.';
+  else if (p.sinal === 'fraco') texto = `Sinal fraco · ${mov}`;
+  else texto = `${mov}${media}`;
+  return { titulo, texto };
+}
+
+/** Resumo em texto para compartilhar (WhatsApp, notas). */
+export function resumoTexto(p, titulo) {
+  const d = new Date(p.inicio);
+  const quando = `${DIAS[d.getDay()]}, ${diaMes(d)}/${d.getFullYear()}${p.via === 'manual' && !p.horaInformada ? '' : `, ${hora(p.inicio)}`}`;
+  const linhas = [`${titulo} · ${quando}`, `Distância: ${km2(p.distancia)} km`];
+  if (p.tempoMov > 0) {
+    linhas.push(`Tempo em movimento: ${duracao(p.tempoMov)}`, `Velocidade média: ${kmh(p.distancia / p.tempoMov)} km/h`);
+  }
+  if (p.via !== 'manual') {
+    linhas.push(`Velocidade máxima: ${kmh(p.velMax)} km/h`);
+    if (p.distancia >= 50 && p.tempoMov > 0) linhas.push(`Ritmo: ${ritmo(p.tempoMov / (p.distancia / 1000))} /km`);
+    linhas.push(`Ganho de elevação: ${inteiro(p.subida)} m`);
+    linhas.push(`Tempo total: ${duracao(p.tempoTotal)}${p.pausas ? ` (${p.pausas} ${p.pausas === 1 ? 'pausa' : 'pausas'})` : ''}`);
+  }
+  linhas.push('Gravado com o Hodômetro');
+  return linhas.join('\n');
 }
