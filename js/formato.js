@@ -40,6 +40,15 @@ export function duracaoCurta(s) {
   return `${s} s`;
 }
 
+/** "1h 30m", "41m 12s" ou "45s", para cartões e stories. */
+export function tempoCurto(s) {
+  s = Math.max(0, Math.round(s || 0));
+  const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, ss = s % 60;
+  if (h) return `${h}h ${m}m`;
+  if (m) return `${m}m ${ss}s`;
+  return `${ss}s`;
+}
+
 /** Segundos por km em 3:24 (ritmo). */
 export function ritmo(sPorKm) {
   if (!Number.isFinite(sPorKm) || sPorKm <= 0) return '--';
@@ -86,6 +95,15 @@ export function rotuloDia(t, agora = Date.now()) {
 
 export function dataLonga(t) {
   return new Date(t).toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+/** "sábado, 24 de outubro às 13:05" (o ano aparece se não for o de agora). */
+export function quandoLongo(t, comHora = true, agora = Date.now()) {
+  const d = new Date(t);
+  const opc = { weekday: 'long', day: 'numeric', month: 'long' };
+  if (d.getFullYear() !== new Date(agora).getFullYear()) opc.year = 'numeric';
+  const dia = d.toLocaleDateString('pt-BR', opc);
+  return comHora ? `${dia} às ${hora(t)}` : dia;
 }
 
 // ---------- histórico ----------
@@ -173,8 +191,8 @@ export function horasLongas(s) {
   return h ? `${h} h ${pad(m % 60)} min` : `${m} min`;
 }
 
-/** Título e texto da notificação do pedal em andamento (tela de bloqueio). */
-export function textoNotificacao(p) {
+/** Título e texto da notificação do pedal em andamento (tela de bloqueio). `extra` vai no fim (rota). */
+export function textoNotificacao(p, extra = '') {
   const titulo = `${kmAoVivo(p.distancia)} km  ·  ${kmh(p.velAtual)} km/h`;
   const mov = `Em movimento ${duracao(p.tempoMov)}`;
   const media = p.tempoMov > 0 ? ` · média ${kmh(p.velMedia)} km/h` : '';
@@ -184,11 +202,12 @@ export function textoNotificacao(p) {
   else if (p.estado === 'parado') texto = p.distancia > 0 ? `Pausa automática · ${mov}` : 'GPS pronto. Pode sair pedalando.';
   else if (p.sinal === 'fraco') texto = `Sinal fraco · ${mov}`;
   else texto = `${mov}${media}`;
+  if (extra && p.estado !== 'aguardando') texto += ` · ${extra}`;
   return { titulo, texto };
 }
 
 /** Resumo em texto para compartilhar (WhatsApp, notas). */
-export function resumoTexto(p, titulo) {
+export function resumoTexto(p, titulo, nomeApp = 'Hodômetro') {
   const d = new Date(p.inicio);
   const quando = `${DIAS[d.getDay()]}, ${diaMes(d)}/${d.getFullYear()}${p.via === 'manual' && !p.horaInformada ? '' : `, ${hora(p.inicio)}`}`;
   const linhas = [`${titulo} · ${quando}`, `Distância: ${km2(p.distancia)} km`];
@@ -201,6 +220,6 @@ export function resumoTexto(p, titulo) {
     linhas.push(`Ganho de elevação: ${inteiro(p.subida)} m`);
     linhas.push(`Tempo total: ${duracao(p.tempoTotal)}${p.pausas ? ` (${p.pausas} ${p.pausas === 1 ? 'pausa' : 'pausas'})` : ''}`);
   }
-  linhas.push('Gravado com o Hodômetro');
+  linhas.push(`Gravado com o ${nomeApp}`);
   return linhas.join('\n');
 }

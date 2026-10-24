@@ -82,3 +82,17 @@ test('notificação e resumo em texto', () => {
   assert.match(t, /Tempo total: 13:20 \(1 pausa\)/);
   assert.doesNotMatch(t, /—/);
 });
+
+test('tempo curto, data por extenso e números dos stories', async () => {
+  const { numerosStory } = await import('../js/story.js');
+  assert.equal(F.tempoCurto(5400), '1h 30m');
+  assert.equal(F.tempoCurto(2472), '41m 12s');
+  assert.equal(F.tempoCurto(45), '45s');
+  const t = new Date(2026, 9, 24, 13, 5).getTime();
+  assert.equal(F.quandoLongo(t, true, t), 'sábado, 24 de outubro às 13:05');
+  const n = numerosStory({ via: 'gps', distancia: 23700, subida: 156, tempoMov: 5400 });
+  assert.deepEqual(n.map(x => x.valor), ['23,70 km', '156 m', '1h 30m']);
+  const m = numerosStory({ via: 'manual', distancia: 3200, subida: 0, tempoMov: 720 });
+  assert.deepEqual(m.map(x => x.rotulo), ['Distância', 'Tempo', 'Velocidade média']);
+  assert.match(F.textoNotificacao({ estado: 'movendo', sinal: 'ok', distancia: 1000, velAtual: 5, tempoMov: 200, velMedia: 5 }, 'faltam 2,10 km').texto, / · faltam 2,10 km$/);
+});
