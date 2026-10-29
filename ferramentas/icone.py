@@ -74,6 +74,17 @@ def redonda(img):
     return out
 
 
+def arredondada(img, raio):
+    """Cantos arredondados (raio em fração do lado), como o ícone na tela do celular."""
+    tam = img.size[0]
+    grande = tam * 4
+    mascara = Image.new('L', (grande, grande), 0)
+    ImageDraw.Draw(mascara).rounded_rectangle((0, 0, grande - 1, grande - 1), radius=round(grande * raio), fill=255)
+    out = Image.new('RGBA', (tam, tam), (0, 0, 0, 0))
+    out.paste(img, (0, 0), mascara.resize((tam, tam), Image.LANCZOS))
+    return out
+
+
 def salvar(img, caminho, rgb=False):
     os.makedirs(os.path.dirname(caminho), exist_ok=True)
     (img.convert('RGB') if rgb else img).save(caminho, optimize=True)
@@ -113,7 +124,10 @@ def main():
         w, h = Image.open(caminho).size
         tela = Image.new('RGBA', (w, h), fundo)
         lado = round(min(w, h) * 0.42)
-        tela.alpha_composite(no_centro(logo, lado, cheio, fundo), ((w - lado) // 2, (h - lado) // 2))
+        icone = no_centro(logo, lado, cheio, fundo)
+        if not transparente:
+            icone = arredondada(icone, 0.22)
+        tela.alpha_composite(icone, ((w - lado) // 2, (h - lado) // 2))
         salvar(tela, caminho, rgb=True)
 
     print('Web:')

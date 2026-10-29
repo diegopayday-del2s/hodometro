@@ -7,7 +7,7 @@ Leia o `README.md` primeiro. Este arquivo diz o que não pode quebrar.
 App de pedal: grava pelo GPS e funciona offline, com progresso, metas, rotas e
 stories no estilo do Strava. HTML, CSS e JavaScript puro, sem build. Roda como
 PWA e como app Android (Capacitor, com o plugin próprio `Gravador`). Os dados
-ficam no IndexedDB do celular. O nome é provisório: veja `docs/apresentacao.md`.
+ficam no IndexedDB do celular. O nome é **Só Mais Um KM** (antes Hodômetro): veja `docs/apresentacao.md`.
 
 ## Regras
 

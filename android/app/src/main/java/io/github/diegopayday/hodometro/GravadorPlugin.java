@@ -93,7 +93,7 @@ public class GravadorPlugin extends Plugin implements LeitorGnss.Ouvinte {
     @PermissionCallback
     private void aposPermissao(PluginCall call) {
         if (getPermissionState("localizacao") != PermissionState.GRANTED) {
-            call.reject("O Hodômetro precisa da localização precisa para medir o pedal.", "SEM_PERMISSAO");
+            call.reject("O app precisa da localização precisa para medir o pedal.", "SEM_PERMISSAO");
             return;
         }
         if ("iniciar".equals(call.getMethodName())) iniciarServico(call);
@@ -114,7 +114,7 @@ public class GravadorPlugin extends Plugin implements LeitorGnss.Ouvinte {
             observador.ligar();
             call.resolve();
         } catch (SecurityException e) {
-            call.reject("O Hodômetro precisa da localização precisa para medir o pedal.", "SEM_PERMISSAO");
+            call.reject("O app precisa da localização precisa para medir o pedal.", "SEM_PERMISSAO");
         }
     }
 

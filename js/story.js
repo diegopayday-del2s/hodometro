@@ -89,7 +89,7 @@ export function numerosRendimento(rd) {
 }
 
 /** Imagem do rendimento desde o começo, com a linha da distância somada. */
-export async function desenharStoryRendimento(canvas, rd, { modelo = 'laranja', foto = null, nome = 'Hodômetro' } = {}) {
+export async function desenharStoryRendimento(canvas, rd, { modelo = 'laranja', foto = null, nome = 'Só Mais Um KM' } = {}) {
   try { await Promise.all(['800 140px Barlow', '600 44px Barlow'].map(f => document.fonts.load(f))); } catch { /* usa a fonte que tiver */ }
   canvas.width = LARG; canvas.height = ALT;
   const ctx = canvas.getContext('2d');
@@ -141,7 +141,7 @@ export async function desenharStoryRendimento(canvas, rd, { modelo = 'laranja', 
  * Desenha a imagem no canvas (1080 x 1920).
  * opcoes: { modelo, foto (imagem carregada, para o modelo foto), nome (do app) }
  */
-export async function desenharStory(canvas, pedal, { modelo = 'laranja', foto = null, nome = 'Hodômetro' } = {}) {
+export async function desenharStory(canvas, pedal, { modelo = 'laranja', foto = null, nome = 'Só Mais Um KM' } = {}) {
   try { await Promise.all(['800 140px Barlow', '600 44px Barlow'].map(f => document.fonts.load(f))); } catch { /* usa a fonte que tiver */ }
   canvas.width = LARG; canvas.height = ALT;
   const ctx = canvas.getContext('2d');

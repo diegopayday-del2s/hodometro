@@ -1,8 +1,8 @@
 {
   "appId": "io.github.diegopayday.hodometro",
-  "appName": "Hodômetro",
+  "appName": "Só Mais Um KM",
   "webDir": "www",
-  "appendUserAgent": "Hodometro (+https://github.com/diegopayday-del2s/hodometro)",
+  "appendUserAgent": "SoMaisUmKM (+https://github.com/diegopayday-del2s/hodometro)",
   "android": {
     "useLegacyBridge": true,
     "backgroundColor": "#FFFFFF",

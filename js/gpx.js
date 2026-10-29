@@ -14,7 +14,7 @@ export function gerarGPX(pedal, nome = 'Pedal') {
   });
   const trkseg = segmentos.filter(s => s.length).map(s => `    <trkseg>\n${s.join('\n')}\n    </trkseg>`).join('\n');
   return `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="Hodômetro" xmlns="http://www.topografix.com/GPX/1/1">
+<gpx version="1.1" creator="Só Mais Um KM" xmlns="http://www.topografix.com/GPX/1/1">
   <metadata><name>${esc(nome)}</name><time>${new Date(ini).toISOString()}</time></metadata>
   <trk>
     <name>${esc(nome)}</name>

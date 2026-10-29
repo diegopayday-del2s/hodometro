@@ -1,4 +1,4 @@
-# Hodômetro
+# Só Mais Um KM
 
 App de pedal no celular. Grava pelo GPS com a tela bloqueada e o celular no
 bolso, sem internet e sem sinal de operadora. Mostra distância, velocidade atual,
@@ -8,8 +8,9 @@ comparação, metas, rotas que você repete (com seu melhor tempo), amigos com
 ranking e imagem para os stories. Não tem servidor nem conta: os pedais ficam
 guardados no próprio celular.
 
-O nome "Hodômetro" é provisório. A apresentação do app para escolher o nome está
-em `docs/apresentacao.md`, com a lista de arquivos onde o nome aparece.
+O nome do app é **Só Mais Um KM** (até a versão 1.3 era Hodômetro, que continua sendo o
+nome do repositório, do pacote Android e do arquivo `Hodometro.apk`). A lista de
+arquivos onde o nome aparece está em `docs/apresentacao.md`.
 
 Existe em duas formas: o **app Android** (recomendado, grava com a tela apagada)
 e a **versão web** (PWA), que precisa da tela ligada.
@@ -19,7 +20,7 @@ e a **versão web** (PWA), que precisa da tela ligada.
 **Instalar ou atualizar:**
 1. No celular, abra https://github.com/diegopayday-del2s/hodometro/releases/latest
 2. Toque em `Hodometro.apk`. Se o Chrome pedir, permita instalar apps desta fonte.
-3. Abra o Hodômetro. Permita a localização ("Durante o uso do app", com
+3. Abra o Só Mais Um KM. Permita a localização ("Durante o uso do app", com
    "Usar local exato" ligado) e as notificações.
 4. Na tela inicial, o cartão **Pronto para o bolso** confere tudo. Se a bateria
    aparecer em amarelo, toque em **Liberar** e confirme: o Android deixa de cortar

@@ -11,7 +11,8 @@ App de bicicleta para Android (também roda no navegador), no estilo do Strava.
 Grava o pedal pelo GPS do próprio celular, funciona sem internet e com a tela
 bloqueada no bolso. Não tem conta nem servidor: tudo fica no celular.
 
-- Nome provisório: **Hodômetro**. Escolher o nome é uma das suas tarefas.
+- Nome: **Só Mais Um KM**, escolhido pelo Diego em 28/10/2026, com a logo das duas
+  pessoas pedalando na trilha (`icons/logo-original.png`).
 - Público: brasileiros que pedalam por lazer e para se locomover, sozinhos ou
   com amigos. Textos em português do Brasil, diretos, sem travessão e sem
   palavras em inglês quando existe palavra nossa.

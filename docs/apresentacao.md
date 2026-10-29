@@ -7,8 +7,8 @@ no navegador). Grava o pedal pelo GPS do próprio celular e mostra os números d
 um ciclocomputador. Funciona sem internet e com a tela bloqueada, com o celular
 no bolso. Não tem conta nem servidor: os dados ficam no celular.
 
-Hoje o nome provisório é **Hodômetro**. O dono do app usa a bike no dia a dia e
-para passear com amigos.
+O nome é **Só Mais Um KM**, escolhido em 28/10/2026 (antes era Hodômetro). O dono do
+app usa a bike no dia a dia e para passear com amigos.
 
 ## O que ele faz
 
@@ -34,8 +34,10 @@ para passear com amigos.
 ## Visual
 
 Inspirado no Strava: fundo branco, laranja forte (#FC5200) para o que importa,
-azul-petróleo para comparação, títulos em Barlow ExtraBold e números grandes. O
-logo atual é uma bike laranja sobre fundo escuro.
+azul-petróleo para comparação, títulos em Barlow ExtraBold e números grandes. A
+logo é uma ilustração de duas pessoas pedalando numa trilha na mata, em verdes e
+amarelo, com a linha do trajeto e o marcador do GPS (`icons/logo-original.png`).
+O fundo do ícone do Android é verde-escuro (#1F5040).
 
 ## Público e tom
 
@@ -63,9 +65,6 @@ apresentação para cada, e a recomendação final.
 - `manifest.webmanifest`: `name` e `short_name`
 - `capacitor.config.json`: `appName`
 - `android/app/src/main/res/values/strings.xml`: `app_name` e `title_activity_main`
-- `android/app/src/main/java/io/github/diegopayday/hodometro/GravadorService.java`:
-  o texto "Abra o Hodômetro para atualizar os números"
-- `GravadorPlugin.java`: as mensagens "O Hodômetro precisa da localização precisa"
 - `js/story.js`, `js/formato.js` e `js/gpx.js`: o nome padrão (o app passa `NOME_APP`,
   mas o padrão aparece se alguém chamar sem ele)
 - `package.json`: `description`

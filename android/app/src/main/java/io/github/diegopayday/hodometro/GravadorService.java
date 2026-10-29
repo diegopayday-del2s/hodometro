@@ -172,7 +172,7 @@ public class GravadorService extends Service implements LeitorGnss.Ouvinte {
         // O app parou de mandar os números (foi fechado): avisa, sem parar de gravar
         if (!avisouAppFechado && System.currentTimeMillis() - ultimoDoApp > 30000) {
             avisouAppFechado = true;
-            mostrar(titulo, "Gravando pelo GPS. Abra o Hodômetro para atualizar os números.", false);
+            mostrar(titulo, "Gravando pelo GPS. Abra o app para atualizar os números.", false);
         }
     }
 

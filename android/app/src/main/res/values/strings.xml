@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Hodômetro</string>
-    <string name="title_activity_main">Hodômetro</string>
+    <string name="app_name">Só Mais Um KM</string>
+    <string name="title_activity_main">Só Mais Um KM</string>
     <string name="package_name">io.github.diegopayday.hodometro</string>
     <string name="custom_url_scheme">io.github.diegopayday.hodometro</string>
 </resources>

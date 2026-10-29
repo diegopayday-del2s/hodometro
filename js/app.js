@@ -1557,12 +1557,12 @@ async function enviarRendimento() {
   const comTrajeto = (d.querySelector('input[name="enModo"]:checked') || {}).value !== 'numeros';
   const pacote = gerarPacote(S.perfil, S.pedais, { comTrajeto });
   const arquivo = `rendimento-${slug(S.perfil.nome)}-${F.chaveDia(Date.now())}.json`;
-  const msg = `Meu rendimento no ${NOME_APP}. Toque no arquivo e abra com o ${NOME_APP} para me adicionar nos amigos.`;
+  const msg = `Meu rendimento no app ${NOME_APP}. Toque no arquivo e abra com o app para me adicionar nos amigos.`;
   const r = await entregarArquivo(JSON.stringify(pacote), arquivo, 'application/json', msg);
   if (r === 'baixado') aviso('Arquivo salvo em Downloads. Mande pelo WhatsApp para o amigo.');
 }
 
-const pedirRendimento = () => compartilharTexto(`Bora comparar os pedais? Me manda o seu rendimento do ${NOME_APP}: abra o app, toque em Amigos e depois em "Mandar meu rendimento".`, 'Pedir o rendimento');
+const pedirRendimento = () => compartilharTexto(`Bora comparar os pedais? Me manda o seu rendimento do app ${NOME_APP}: abra o app, toque em Amigos e depois em "Mandar meu rendimento".`, 'Pedir o rendimento');
 
 /** Arquivo de amigo recebido: entra na lista ou atualiza quem já estava. */
 async function receberAmigo(dados) {
@@ -1991,7 +1991,7 @@ function ligarEventos() {
 
   $('#btnBackup').addEventListener('click', async () => {
     const dados = { app: 'hodometro', versao: 3, exportadoEm: new Date().toISOString(), ajustes: S.cfg, perfil: S.perfil, pedais: S.pedais, rotas: S.rotas, amigos: S.amigos };
-    const r = await entregarArquivo(JSON.stringify(dados), `hodometro-backup-${F.chaveDia(Date.now())}.json`, 'application/json');
+    const r = await entregarArquivo(JSON.stringify(dados), `so-mais-um-km-backup-${F.chaveDia(Date.now())}.json`, 'application/json');
     if (r === 'baixado') aviso('Backup salvo em Downloads.');
   });
   $('#arqBackup').addEventListener('change', async e => {

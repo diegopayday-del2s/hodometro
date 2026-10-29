@@ -1,7 +1,7 @@
 {
-  "name": "Hodômetro",
-  "short_name": "Hodômetro",
-  "description": "Grava o pedal pelo GPS com a tela bloqueada. Progresso, metas, rotas e stories. Funciona offline.",
+  "name": "Só Mais Um KM",
+  "short_name": "Só Mais Um KM",
+  "description": "Grava o pedal pelo GPS com a tela bloqueada. Rendimento, amigos, rotas e stories. Funciona offline.",
   "lang": "pt-BR",
   "dir": "ltr",
   "id": "./",

@@ -2,7 +2,7 @@
   "name": "hodometro",
   "version": "1.4.0",
   "private": true,
-  "description": "Hodômetro de bike: grava o pedal pelo GPS, funciona offline. Web (PWA) e app Android.",
+  "description": "Só Mais Um KM, app de bike: grava o pedal pelo GPS, funciona offline. Web (PWA) e app Android.",
   "type": "module",
   "scripts": {
     "test": "node --test",

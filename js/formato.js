@@ -207,7 +207,7 @@ export function textoNotificacao(p, extra = '') {
 }
 
 /** Resumo em texto para compartilhar (WhatsApp, notas). */
-export function resumoTexto(p, titulo, nomeApp = 'Hodômetro') {
+export function resumoTexto(p, titulo, nomeApp = 'Só Mais Um KM') {
   const d = new Date(p.inicio);
   const quando = `${DIAS[d.getDay()]}, ${diaMes(d)}/${d.getFullYear()}${p.via === 'manual' && !p.horaInformada ? '' : `, ${hora(p.inicio)}`}`;
   const linhas = [`${titulo} · ${quando}`, `Distância: ${km2(p.distancia)} km`];
@@ -220,6 +220,6 @@ export function resumoTexto(p, titulo, nomeApp = 'Hodômetro') {
     linhas.push(`Ganho de elevação: ${inteiro(p.subida)} m`);
     linhas.push(`Tempo total: ${duracao(p.tempoTotal)}${p.pausas ? ` (${p.pausas} ${p.pausas === 1 ? 'pausa' : 'pausas'})` : ''}`);
   }
-  linhas.push(`Gravado com o ${nomeApp}`);
+  linhas.push(`Gravado com o app ${nomeApp}`);
   return linhas.join('\n');
 }
