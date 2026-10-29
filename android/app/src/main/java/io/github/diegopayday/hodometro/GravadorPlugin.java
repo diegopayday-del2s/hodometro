@@ -4,6 +4,7 @@ import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.database.Cursor;
 import android.location.Location;
 import android.media.AudioAttributes;
 import android.net.Uri;
@@ -13,6 +14,7 @@ import android.os.VibrationAttributes;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.os.VibratorManager;
+import android.provider.OpenableColumns;
 import android.provider.Settings;
 import android.view.WindowManager;
 import com.getcapacitor.JSArray;
@@ -24,6 +26,10 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
@@ -35,8 +41,9 @@ import java.util.List;
  * leituras()      o que o serviço gravou enquanto o app estava fechado
  * atualizar()     números da notificação
  * bateria(), pedirBateriaLivre(), abrirAjustes(), vibrar(), manterTela()
+ * arquivoRecebido() arquivo aberto com o app pelo WhatsApp ou pelo Drive (amigo, backup, GPX)
  *
- * Eventos: "leitura", "satelites" e "gps".
+ * Eventos: "leitura", "satelites", "gps" e "arquivo".
  */
 @CapacitorPlugin(
     name = "Gravador",
@@ -47,6 +54,8 @@ import java.util.List;
 public class GravadorPlugin extends Plugin implements LeitorGnss.Ouvinte {
 
     private LeitorGnss observador;
+    /** Arquivo que chegou com o app já aberto e ainda não foi lido. */
+    private Uri recebido;
 
     @Override
     public void load() {
@@ -273,6 +282,83 @@ public class GravadorPlugin extends Plugin implements LeitorGnss.Ouvinte {
             else a.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
             call.resolve();
         });
+    }
+
+    // ---------- arquivo aberto com o app ----------
+
+    @Override
+    protected void handleOnNewIntent(Intent intent) {
+        super.handleOnNewIntent(intent);
+        Uri u = uriDe(intent);
+        if (u != null) {
+            recebido = u;
+            notifyListeners("arquivo", new JSObject());
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    private static Uri uriDe(Intent intent) {
+        if (intent == null) return null;
+        if (Intent.ACTION_VIEW.equals(intent.getAction())) return intent.getData();
+        if (Intent.ACTION_SEND.equals(intent.getAction())) {
+            Object extra = intent.getParcelableExtra(Intent.EXTRA_STREAM);
+            return extra instanceof Uri ? (Uri) extra : null;
+        }
+        return null;
+    }
+
+    /**
+     * Texto do arquivo aberto com o app: { texto, nome }. Vazio se não chegou
+     * nada. Cada arquivo é entregue uma vez só.
+     */
+    @PluginMethod
+    public void arquivoRecebido(PluginCall call) {
+        Activity a = getActivity();
+        Uri u = recebido;
+        recebido = null;
+        if (u == null && a != null) {
+            u = uriDe(a.getIntent());
+            if (u != null) a.setIntent(new Intent(Intent.ACTION_MAIN));
+        }
+        if (u == null) {
+            call.resolve(new JSObject());
+            return;
+        }
+        final Uri uri = u;
+        final Context ctx = getContext();
+        execute(() -> {
+            try (InputStream in = ctx.getContentResolver().openInputStream(uri)) {
+                if (in == null) throw new IOException("arquivo vazio");
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                byte[] buf = new byte[16384];
+                long total = 0;
+                int n;
+                while ((n = in.read(buf)) > 0) {
+                    total += n;
+                    if (total > 20L * 1024 * 1024) throw new IOException("arquivo grande demais");
+                    out.write(buf, 0, n);
+                }
+                JSObject r = new JSObject();
+                r.put("texto", new String(out.toByteArray(), StandardCharsets.UTF_8));
+                r.put("nome", nomeDe(ctx, uri));
+                call.resolve(r);
+            } catch (Exception e) {
+                call.reject("Não consegui abrir o arquivo: " + e.getMessage(), "ARQUIVO");
+            }
+        });
+    }
+
+    private static String nomeDe(Context ctx, Uri uri) {
+        try (Cursor c = ctx.getContentResolver().query(uri, new String[] { OpenableColumns.DISPLAY_NAME }, null, null, null)) {
+            if (c != null && c.moveToFirst()) {
+                String nome = c.getString(0);
+                if (nome != null) return nome;
+            }
+        } catch (Exception e) {
+            // sem nome
+        }
+        String s = uri.getLastPathSegment();
+        return s != null ? s : "";
     }
 
     // ---------- eventos ----------

@@ -19,7 +19,8 @@ bloqueada no bolso. Não tem conta nem servidor: tudo fica no celular.
 
 ## 2. O que já existe (versão 1.3)
 
-Abas: **Início**, **Rotas**, **Gravar** e **Você**. Engrenagem no topo para Ajustes.
+Abas: **Início**, **Rotas**, **Gravar**, **Amigos** e **Você**. Engrenagem no topo
+para Ajustes. (Versão 1.4: aba Amigos e Rendimento em Você; veja o README.)
 
 - **Início:** resumo da semana (distância, tempo, elevação), anel da meta da
   semana, atividades em cartões com o mapa do trajeto.
@@ -75,6 +76,8 @@ js/app.js             estado, telas, GPS, gravação, avisos, rotas, stories
 js/ui.js              h(), aviso(), confirmar(), pedirTexto(), segurarPara()
 js/graficos.js        gráfico de progresso, horas de atividade, anel de meta
 js/progresso.js       progresso e metas (puro, testado)
+js/rendimento.js      rendimento desde o primeiro pedal (puro, testado)
+js/amigos.js          amigos sem servidor: arquivo, ranking, pedal junto (puro, testado)
 js/rotas.js           rotas e GuiaRota (puro, testado)
 js/rastreador.js      motor do pedal (puro, testado)
 js/mapa.js            blocos do mapa OpenStreetMap atrás do trajeto

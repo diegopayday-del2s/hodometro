@@ -39,6 +39,8 @@
   <symbol id="i-montanha" viewBox="0 0 24 24"><path d="M2.5 19.5l6.5-11 4 6.5 2.5-3.5 6 8z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></symbol>
   <symbol id="i-relogio" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
   <symbol id="i-foto" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.9"/><circle cx="12" cy="12.5" r="3.6" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M8.5 5.5l1.3-2h4.4l1.3 2" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></symbol>
+  <symbol id="i-amigos" viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3.4" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M2.8 19.5c.6-3.4 3.1-5.4 6.2-5.4s5.6 2 6.2 5.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="16.6" cy="9.3" r="2.7" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M16.4 14.2c2.6 0 4.4 1.7 4.9 4.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="i-sobe" viewBox="0 0 24 24"><path d="M3.5 17.5l5.5-5.5 4 4 7.5-7.5M15 8.5h5.5V14" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
 </svg>
 
@@ -68,7 +70,7 @@
     </section>
 
     <section class="bloco">
-      <div class="bloco-h"><h2>Suas atividades</h2><button type="button" class="link" data-ir="voce-atividades">Ver todas</button></div>
+      <div class="bloco-h"><h2 id="feedTitulo">Suas atividades</h2><button type="button" class="link" data-ir="voce-atividades">Ver todas</button></div>
       <div id="feed" class="feed"></div>
     </section>
 
@@ -189,15 +191,124 @@
     </div>
   </main>
 
+  <!-- AMIGOS -->
+  <main class="tela" id="telaAmigos" hidden>
+    <header class="barra"><h1>Amigos</h1><button type="button" class="icone" data-ajustes aria-label="Ajustes"><svg><use href="#i-engrenagem"/></svg></button></header>
+
+    <section class="cartao convite">
+      <div class="perfil-linha">
+        <span class="avatar voce" id="amAvatar" aria-hidden="true">?</span>
+        <span><b id="amNome">Seu nome</b><small id="amNomeSub">É assim que os amigos veem você no ranking.</small></span>
+        <button type="button" class="link" id="btnNome">Mudar</button>
+      </div>
+      <p class="hint">Sem conta e sem servidor: você manda seu rendimento num arquivo pelo WhatsApp e o amigo abre no app. Vocês entram no ranking um do outro, e os pedais feitos juntos aparecem lado a lado.</p>
+      <div class="linha-btn coluna">
+        <button type="button" class="btn-pilula" id="btnEnviarAmigo"><svg aria-hidden="true"><use href="#i-compartilhar"/></svg>Mandar meu rendimento</button>
+        <button type="button" class="btn2" id="btnPedirAmigo">Pedir o de um amigo</button>
+      </div>
+      <label class="link centro" for="arqAmigo">Recebi um arquivo: abrir aqui</label>
+      <input type="file" id="arqAmigo" accept=".json,application/json" hidden>
+    </section>
+
+    <section class="bloco" id="amRankingBloco">
+      <div class="bloco-h"><h2>Ranking</h2><span class="lado" id="amRankingLado">distância</span></div>
+      <div class="chips" role="group" aria-label="Período do ranking" id="chipsRanking">
+        <button type="button" class="chip-o" data-rk="semana">Semana</button>
+        <button type="button" class="chip-o" data-rk="mes">Mês</button>
+        <button type="button" class="chip-o" data-rk="total">Desde o começo</button>
+      </div>
+      <div class="ranking" id="amRanking"></div>
+      <p class="hint" id="amRankingDica"></p>
+    </section>
+
+    <section class="bloco" id="amFeedBloco">
+      <div class="bloco-h"><h2>Pedais dos amigos</h2></div>
+      <div id="amFeed" class="feed"></div>
+    </section>
+
+    <section class="bloco" id="amListaBloco">
+      <div class="bloco-h"><h2>Seus amigos</h2><span class="lado" id="amListaLado"></span></div>
+      <div class="tentativas" id="amLista"></div>
+    </section>
+  </main>
+
   <!-- VOCÊ -->
   <main class="tela" id="telaVoce" hidden>
     <header class="barra"><h1>Você</h1><button type="button" class="icone" data-ajustes aria-label="Ajustes"><svg><use href="#i-engrenagem"/></svg></button></header>
-    <div class="abas-topo" role="tablist" aria-label="Você">
-      <button type="button" role="tab" data-sub="progresso" aria-selected="true">Progresso</button>
+    <div class="abas-topo tres-abas" role="tablist" aria-label="Você">
+      <button type="button" role="tab" data-sub="rendimento" aria-selected="true">Rendimento</button>
+      <button type="button" role="tab" data-sub="progresso" aria-selected="false">Progresso</button>
       <button type="button" role="tab" data-sub="atividades" aria-selected="false">Atividades</button>
     </div>
 
-    <div id="subProgresso" class="tela">
+    <div id="subRendimento" class="tela">
+      <div id="rdVazio" class="vazio" hidden>
+        <p>Seu rendimento aparece aqui depois do primeiro pedal: quanto você já pedalou, se a sua média está subindo e em quais rotas você ficou mais rápido.</p>
+        <button type="button" class="btn-pilula" data-tela-ir="gravar">Gravar o primeiro</button>
+      </div>
+      <div id="rdConteudo" class="tela">
+        <section class="rend-topo">
+          <span class="rot-ic"><svg class="ic"><use href="#i-sobe"/></svg><span id="rdDesde">Desde o começo</span></span>
+          <div class="rend-grande"><b id="rdKm">0</b><small>km</small></div>
+          <p class="rend-sub" id="rdSub"></p>
+          <div class="tres">
+            <div><span class="k">Tempo</span><b id="rdTempo">0min</b></div>
+            <div><span class="k">Vel. média</span><b id="rdMedia">0,0</b></div>
+            <div><span class="k">Elevação</span><b id="rdSubida">0 m</b></div>
+          </div>
+        </section>
+
+        <section class="bloco" id="rdDestaquesBloco">
+          <div class="bloco-h"><h2>O que mudou</h2></div>
+          <ul class="destaques" id="rdDestaques"></ul>
+        </section>
+
+        <section class="bloco">
+          <div class="bloco-h"><h2>Distância somada</h2><span class="lado">desde o primeiro pedal</span></div>
+          <div id="rdAcumulado"></div>
+          <p class="sem-cap" id="rdAcLeitura">Toque no gráfico para ver cada dia.</p>
+        </section>
+
+        <section class="bloco" id="rdEvolucaoBloco">
+          <div class="bloco-h"><h2>Velocidade média</h2><span class="lado">pedal a pedal</span></div>
+          <div id="rdEvolucao"></div>
+          <p class="sem-cap" id="rdEvLeitura">Cada ponto é um pedal com GPS de 1 km ou mais. O tracejado mostra a tendência.</p>
+        </section>
+
+        <section class="bloco">
+          <div class="bloco-h"><h2>Por semana</h2><span class="lado" id="rdSemLado"></span></div>
+          <div id="rdSemanas"></div>
+          <p class="sem-cap" id="rdSemLeitura">Toque numa barra para ver a semana.</p>
+        </section>
+
+        <section class="bloco" id="rdComparaBloco">
+          <div class="bloco-h"><h2>Começo e agora</h2><span class="lado" id="rdComparaLado"></span></div>
+          <div class="compara" id="rdCompara"></div>
+        </section>
+
+        <section class="bloco">
+          <div class="bloco-h"><h2>Próximo marco</h2></div>
+          <div class="meta-item" id="rdMarco"></div>
+        </section>
+
+        <section class="bloco" id="rdRotasBloco">
+          <div class="bloco-h"><h2>Rotas em que você melhorou</h2></div>
+          <div class="tentativas" id="rdRotas"></div>
+        </section>
+
+        <section class="bloco">
+          <div class="bloco-h"><h2>Constância</h2></div>
+          <div class="recordes" id="rdConstancia"></div>
+        </section>
+
+        <div class="linha-btn coluna">
+          <button type="button" class="btn-pilula" id="btnStoryRend"><svg aria-hidden="true"><use href="#i-compartilhar"/></svg>Compartilhar nos stories</button>
+          <button type="button" class="btn2" id="btnRendAmigo"><svg aria-hidden="true" class="ic"><use href="#i-amigos"/></svg>Mandar para um amigo</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="subProgresso" class="tela" hidden>
       <div class="chips" role="group" aria-label="Métrica" id="chipsMetrica">
         <button type="button" class="chip-o" data-metrica="distancia">Distância</button>
         <button type="button" class="chip-o" data-metrica="tempo">Tempo</button>
@@ -230,15 +341,6 @@
       <section class="bloco">
         <div class="bloco-h"><h2>Recordes pessoais</h2><span class="lado">pedais com GPS</span></div>
         <div class="recordes" id="recordes"></div>
-      </section>
-
-      <section class="bloco">
-        <div class="bloco-h"><h2>Desde o começo</h2><span class="lado" id="estDesde"></span></div>
-        <div class="tres cartao">
-          <div><span class="k">Distância</span><b id="estKm">0 km</b></div>
-          <div><span class="k">Tempo</span><b id="estHoras">0min</b></div>
-          <div><span class="k">Pedais</span><b id="estN">0</b></div>
-        </div>
       </section>
     </div>
 
@@ -314,6 +416,9 @@
         <label class="btn2" for="arqGpx">Importar pedal (GPX do Strava)</label>
       </div>
       <input type="file" id="arqGpx" accept=".gpx,application/gpx+xml,text/xml" multiple hidden>
+      <div class="grupo" id="blocoCopia" hidden>
+        <div class="linha"><span><b>Cópia automática</b><small id="copiaTxt"></small></span><button type="button" class="btn2" id="btnRestaurarCopia">Restaurar</button></div>
+      </div>
       <button type="button" class="btn2 perigo" id="btnApagarTudo">Apagar todos os pedais</button>
     </section>
 
@@ -345,12 +450,17 @@
   <div class="app tela">
     <div class="d-titulo">
       <span id="dSelo"></span>
+      <div class="autor" id="dAutor" hidden></div>
       <h1><span id="dTitulo">Pedal</span><button type="button" class="icone sem-borda pequeno" id="btnRenomear" aria-label="Mudar o nome"><svg><use href="#i-lapis"/></svg></button></h1>
       <p id="dSub"></p>
     </div>
     <div class="numeros" id="dNumeros"></div>
     <div id="dSelos" class="selos"></div>
     <button type="button" class="btn-pilula" id="btnStory"><svg aria-hidden="true"><use href="#i-compartilhar"/></svg>Compartilhar nos stories</button>
+    <section class="bloco" id="dJuntosBloco" hidden>
+      <div class="bloco-h"><h2 id="dJuntosTitulo">Pedalaram juntos</h2><span class="lado">o mesmo pedal em dois celulares</span></div>
+      <div id="dJuntos" class="juntos"></div>
+    </section>
     <section class="bloco" id="dGraficoBloco">
       <div class="bloco-h"><h2>Velocidade</h2><span class="lado">km/h por km</span></div>
       <div id="dGrafico"></div>
@@ -368,6 +478,7 @@
     <p class="hint" id="dNotas"></p>
     <div class="linha-btn">
       <button type="button" class="btn2" id="btnCompartilhar">Resumo em texto</button>
+      <button type="button" class="btn2" id="btnVerAmigo" hidden>Ver o amigo</button>
       <button type="button" class="btn2" id="btnGpx">Exportar GPX</button>
       <button type="button" class="btn2" id="btnSalvarRota">Salvar como rota</button>
     </div>
@@ -398,11 +509,40 @@
       <div id="rElevacaoGrafico"></div>
       <p class="sem-cap" id="rElevacaoLeitura">Toque no gráfico para ver a altitude em cada trecho.</p>
     </section>
+    <section class="bloco" id="rRankingBloco" hidden>
+      <div class="bloco-h"><h2>Ranking com amigos</h2><span class="lado">melhor tempo de cada um</span></div>
+      <div id="rRanking" class="tentativas"></div>
+    </section>
     <section class="bloco">
       <div class="bloco-h"><h2>Suas tentativas</h2><span class="lado">tempo em movimento</span></div>
       <div id="rTentativas" class="tentativas"></div>
     </section>
     <button type="button" class="btn2 perigo" id="btnApagarRota">Excluir rota</button>
+  </div>
+</section>
+
+<!-- AMIGO -->
+<section class="sobreposta" id="amigoDetalhe" hidden aria-labelledby="aTitulo">
+  <header class="barra fixa"><button type="button" class="icone sem-borda" id="btnVoltarAmigo" aria-label="Voltar"><svg><use href="#i-voltar"/></svg></button><h1>Amigo</h1><span class="espaco"></span></header>
+  <div class="app tela">
+    <div class="amigo-topo">
+      <span class="avatar grande" id="aAvatar" aria-hidden="true"></span>
+      <div class="d-titulo">
+        <h1><span id="aTitulo">Amigo</span><button type="button" class="icone sem-borda pequeno" id="btnApelido" aria-label="Mudar o nome"><svg><use href="#i-lapis"/></svg></button></h1>
+        <p id="aSub"></p>
+      </div>
+    </div>
+    <div class="numeros" id="aNumeros"></div>
+    <section class="bloco" id="aJuntosBloco" hidden>
+      <div class="bloco-h"><h2>Pedais juntos</h2><span class="lado" id="aJuntosLado"></span></div>
+      <div id="aJuntos" class="feed"></div>
+    </section>
+    <section class="bloco">
+      <div class="bloco-h"><h2>Pedais recebidos</h2><span class="lado" id="aPedaisLado"></span></div>
+      <div id="aPedais" class="feed"></div>
+    </section>
+    <p class="hint" id="aDica"></p>
+    <button type="button" class="btn2 perigo" id="btnRemoverAmigo">Remover amigo</button>
   </div>
 </section>
 
@@ -461,6 +601,22 @@
   </form>
 </dialog>
 
+<dialog class="dialogo" id="dlgEnviar" aria-labelledby="enTitulo">
+  <form method="dialog" id="formEnviar">
+    <h2 id="enTitulo">Mandar seu rendimento</h2>
+    <p>Vai num arquivo para você mandar pelo WhatsApp. O amigo toca no arquivo e abre com o app.</p>
+    <div class="opcoes">
+      <label class="opcao"><input type="radio" name="enModo" value="mapas" checked><span><b>Com os mapas</b><span>Os últimos 20 pedais com o trajeto. Dá para ver os pedais feitos juntos e o ranking das rotas.</span></span></label>
+      <label class="opcao"><input type="radio" name="enModo" value="numeros"><span><b>Só os números</b><span>Distância, tempo e velocidade, sem mostrar por onde você passou.</span></span></label>
+    </div>
+    <p class="hint">O mapa mostra de onde você sai e aonde chega. Mande com mapa só para quem você conhece.</p>
+    <div class="linha-btn">
+      <button type="submit" class="btn2" value="nao">Cancelar</button>
+      <button type="submit" class="btn-pilula" value="sim">Mandar</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog class="dialogo" id="dlgRotas" aria-labelledby="erTitulo">
   <form method="dialog">
     <h2 id="erTitulo">Seguir uma rota</h2>
@@ -500,6 +656,10 @@
   <button type="button" data-tela="gravar">
     <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="4.6" fill="currentColor"/></svg>
     Gravar
+  </button>
+  <button type="button" data-tela="amigos">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-amigos"/></svg>
+    Amigos
   </button>
   <button type="button" data-tela="voce">
     <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9 3.5v3M15 3.5v3M8.5 16v-3M12 16v-6M15.5 16v-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>

@@ -3,9 +3,10 @@
 App de pedal no celular. Grava pelo GPS com a tela bloqueada e o celular no
 bolso, sem internet e sem sinal de operadora. Mostra distância, velocidade atual,
 média e máxima, tempo em movimento e tempo total, ritmo por km, pausas, parciais
-e ganho de elevação. Tem progresso com comparação, metas, rotas que você repete
-(com seu melhor tempo) e imagem para os stories. Não tem servidor nem conta: os
-pedais ficam guardados no próprio celular.
+e ganho de elevação. Tem rendimento desde o primeiro pedal, progresso com
+comparação, metas, rotas que você repete (com seu melhor tempo), amigos com
+ranking e imagem para os stories. Não tem servidor nem conta: os pedais ficam
+guardados no próprio celular.
 
 O nome "Hodômetro" é provisório. A apresentação do app para escolher o nome está
 em `docs/apresentacao.md`, com a lista de arquivos onde o nome aparece.
@@ -26,7 +27,9 @@ e a **versão web** (PWA), que precisa da tela ligada.
 
 Atualizações instalam por cima da versão anterior sem apagar os pedais, porque
 todas saem com o mesmo `applicationId` e a mesma assinatura. O banco de dados
-dos pedais não muda de formato.
+dos pedais não muda de formato. Na primeira vez que uma versão nova abre, o app
+guarda uma **cópia automática** de todos os pedais antes de qualquer outra coisa
+(em Ajustes, Seus dados, dá para restaurar; restaurar só devolve o que faltar).
 
 **Como grava no bolso:**
 - O GPS vem direto do chip do celular (satélites GPS, Galileo, GLONASS, BeiDou),
@@ -49,11 +52,11 @@ Guarde essa senha num lugar seguro: sem ela, uma versão nova não instala por c
 
 ## Usar
 
-O app tem quatro abas: **Início**, **Rotas**, **Gravar** e **Você**. A engrenagem
-no topo abre os Ajustes.
+O app tem cinco abas: **Início**, **Rotas**, **Gravar**, **Amigos** e **Você**. A
+engrenagem no topo abre os Ajustes.
 
 - **Início:** resumo da semana (distância, tempo e elevação), a meta da semana e
-  as atividades em cartões com o mapa do trajeto.
+  as atividades em cartões com o mapa do trajeto, as suas e as dos amigos.
 - **Gravar:** mapa com a sua posição (quando tem internet), o cartão **Sinal do
   GPS** (Buscando, Fraco, Bom ou Excelente, com a precisão em metros e os
   satélites em uso), o que falta liberar para gravar no bolso, a rota a seguir e
@@ -84,16 +87,33 @@ no topo abre os Ajustes.
   em que costuma sair e todas as tentativas com medalha para as 3 melhores.
   **Pedalar esta rota** grava mostrando quanto falta, se você saiu do caminho e
   quantos segundos está à frente ou atrás do seu melhor tempo (também por voz).
+- **Você, Rendimento:** tudo desde o primeiro pedal, para quem começou há pouco
+  também ter gráfico cheio. Total de km, tempo, média e elevação; o que mudou
+  ("sua média subiu 12%", "seus pedais estão 30% mais longos", "na rota X você já
+  está 1m 20s mais rápido"); distância somada dia a dia; velocidade média de cada
+  pedal com a tendência; km por semana; começo e agora lado a lado; o próximo
+  marco (25, 50, 100 km...) e quando você chega nele no seu ritmo; as rotas em que
+  você melhorou; e a constância (dias pedalados, semanas seguidas). Dá para
+  compartilhar nos stories ou mandar para um amigo.
 - **Você, Progresso:** distância, tempo ou elevação nas últimas 4 semanas, 3
   meses ou 12 meses, com a linha do período anterior para comparar e a frase do
   resumo ("sua distância aumentou 12%"). Embaixo, metas de semana, mês e ano em
   km, horas ou subida (quanto falta, quanto precisa por semana e onde você chega
-  no ritmo de agora), recordes pessoais e os totais desde o começo.
+  no ritmo de agora) e recordes pessoais.
+- **Amigos:** sem conta e sem servidor. **Mandar meu rendimento** gera um arquivo
+  (com os mapas dos últimos 20 pedais, ou só os números) para mandar pelo
+  WhatsApp. O amigo toca no arquivo, abre com o app e você entra nos amigos dele.
+  Aparecem o ranking da semana, do mês e desde o começo, os pedais dos amigos no
+  feed, e o ranking da rota (o melhor tempo de cada um no mesmo caminho). Quando
+  vocês pedalam juntos, o resumo do pedal mostra os números dos dois celulares
+  lado a lado e explica a diferença. Para atualizar, cada um manda de novo. Os
+  pedais dos amigos ficam à parte e nunca entram no seu progresso.
 - **Você, Atividades:** todos os pedais por mês e o **Lançar pedal sem GPS**, para
   um pedal que não foi gravado (o tempo é opcional).
 - **Ajustes:** pausa automática, precisão do GPS, mapa de fundo, avisos, bateria,
-  backup e demonstração.
-- **Backup:** em Ajustes. Como tudo fica no celular, exporte de vez em quando.
+  backup, cópia automática e demonstração.
+- **Backup:** em Ajustes. Como tudo fica no celular, exporte de vez em quando. O
+  backup leva os pedais, as rotas, os amigos e o seu nome no ranking.
 
 ## Como calcula
 
@@ -184,10 +204,12 @@ css/app.css           visual (tokens de cor no topo, tema claro e laranja)
 js/app.js             controle das telas, GPS, gravação, avisos, exportação
 js/marca.js           nome do app (um lugar só)
 js/progresso.js       progresso por semana ou mês e metas (sem DOM, testado)
+js/rendimento.js      rendimento desde o primeiro pedal (sem DOM, testado)
+js/amigos.js          arquivo do amigo, ranking, pedal junto (sem DOM, testado)
 js/rotas.js           rotas repetidas e guia durante o pedal (sem DOM, testado)
 js/mapa.js            blocos de mapa atrás do trajeto, quando tem internet
 js/story.js           imagem para os stories
-js/graficos.js        gráfico de progresso, horas de atividade e anéis de meta
+js/graficos.js        progresso, rendimento, horas de atividade e anéis de meta
 js/ui.js              peças de tela: avisos, diálogos, botão de segurar
 js/rastreador.js      motor de cálculo (sem DOM, testado)
 js/geo.js             distância (haversine), projeção e filtros de Kalman
@@ -199,14 +221,15 @@ js/fontes.js          leitura do GPS (navegador, Android) e fonte simulada
 js/nativo.js          ponte para os plugins do Android
 js/voz.js             avisos falados
 js/vibra.js           avisos por vibração
-js/gpx.js             exportação GPX
+js/gpx.js             exportação e importação GPX
 sw.js                 service worker (offline)
 manifest.webmanifest  instalação
 tests/                testes (node --test)
-ferramentas/          relatório de precisão e cópia do app para o Android
+ferramentas/          precisão, cópia do app para o Android e ícone (icone.py)
 android/              projeto Android (Capacitor)
   app/src/main/java/io/github/diegopayday/hodometro/
-    GravadorPlugin.java   ponte JS: GPS, notificação, bateria, vibração, tela
+    GravadorPlugin.java   ponte JS: GPS, notificação, bateria, vibração, tela,
+                          arquivo aberto com o app (amigo, backup, GPX)
     GravadorService.java  serviço em primeiro plano: GPS, trava de CPU, arquivo
     LeitorGnss.java       GPS direto do chip e contagem de satélites
     MainActivity.java     registra o plugin e trata o botão Voltar
@@ -254,3 +277,7 @@ Próximos passos possíveis:
 - **Mapa com fundo offline** (tiles baixados antes) e navegação por rota.
 - **Segmentos**: trechos favoritos com tempo melhor de cada vez.
 - **Compartilhar localização ao vivo** com alguém durante o pedal.
+
+**Trocar o ícone:** `python ferramentas/icone.py caminho/da/logo.png` gera todos
+os tamanhos do Android (ícone adaptativo, redondo e a abertura) e da versão web.
+Precisa do Python com Pillow (`pip install pillow`).

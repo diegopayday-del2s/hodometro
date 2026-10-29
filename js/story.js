@@ -1,5 +1,6 @@
 // Imagem do pedal para os stories (1080 x 1920): distância, subida e tempo
-// em cima, o desenho do trajeto embaixo e o nome do app. Três modelos:
+// em cima, o desenho do trajeto embaixo e o nome do app. Também a imagem do
+// rendimento desde o começo (desenharStoryRendimento). Três modelos:
 //   laranja       fundo laranja chapado
 //   foto          uma foto da galeria, escurecida para o texto aparecer
 //   transparente  só o texto e o trajeto, para colar por cima de uma foto no Instagram
@@ -39,6 +40,101 @@ function capa(ctx, img) {
   const k = Math.max(LARG / img.width, ALT / img.height);
   const w = img.width * k, h = img.height * k;
   ctx.drawImage(img, (LARG - w) / 2, (ALT - h) / 2, w, h);
+}
+
+/** Fundo do modelo. Devolve a cor do traço e se o texto precisa de sombra. */
+function fundo(ctx, modelo, foto) {
+  ctx.clearRect(0, 0, LARG, ALT);
+  if (modelo === 'laranja') {
+    ctx.fillStyle = LARANJA; ctx.fillRect(0, 0, LARG, ALT);
+    const g = ctx.createRadialGradient(LARG * 0.5, ALT * 0.28, 50, LARG * 0.5, ALT * 0.28, ALT * 0.8);
+    g.addColorStop(0, 'rgba(255,255,255,.14)'); g.addColorStop(1, 'rgba(0,0,0,.10)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, LARG, ALT);
+    return { traco: '#ffffff', sombra: false };
+  }
+  if (modelo === 'foto') {
+    if (foto) capa(ctx, foto);
+    else { ctx.fillStyle = '#1f1f24'; ctx.fillRect(0, 0, LARG, ALT); }
+    const g = ctx.createLinearGradient(0, 0, 0, ALT);
+    g.addColorStop(0, 'rgba(0,0,0,.55)'); g.addColorStop(0.55, 'rgba(0,0,0,.25)'); g.addColorStop(1, 'rgba(0,0,0,.55)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, LARG, ALT);
+  }
+  return { traco: LARANJA, sombra: true };
+}
+
+function marcaApp(ctx, nome, sombra) {
+  if (sombra) { ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 18; }
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.font = '800 76px Barlow, system-ui, sans-serif';
+  ctx.letterSpacing = '6px';
+  ctx.fillText(nome.toUpperCase(), LARG / 2, 1740);
+  ctx.letterSpacing = '0px';
+  ctx.shadowColor = 'transparent';
+}
+
+/** Os números do rendimento que vão na imagem. `rd`: saída de rendimento(). */
+export function numerosRendimento(rd) {
+  const n = [
+    { rotulo: 'Distância', valor: `${F.km1(rd.total.distancia)} km` },
+    { rotulo: 'Pedais', valor: F.inteiro(rd.n) },
+    { rotulo: 'Tempo pedalando', valor: F.tempoCurto(rd.total.tempoMov) },
+  ];
+  let destaque = null;
+  if (rd.velocidade && rd.velocidade.variacao >= 0.02) destaque = `Média ${Math.round(rd.velocidade.variacao * 100)}% mais rápida`;
+  else if (rd.distancia && rd.distancia.variacao >= 0.05) destaque = `Pedais ${Math.round(rd.distancia.variacao * 100)}% mais longos`;
+  else if (rd.semanasSeguidas >= 2) destaque = `${rd.semanasSeguidas} semanas seguidas`;
+  else if (rd.total.velMedia > 0) destaque = `Média de ${F.kmh(rd.total.velMedia)} km/h`;
+  return { numeros: n, destaque };
+}
+
+/** Imagem do rendimento desde o começo, com a linha da distância somada. */
+export async function desenharStoryRendimento(canvas, rd, { modelo = 'laranja', foto = null, nome = 'Hodômetro' } = {}) {
+  try { await Promise.all(['800 140px Barlow', '600 44px Barlow'].map(f => document.fonts.load(f))); } catch { /* usa a fonte que tiver */ }
+  canvas.width = LARG; canvas.height = ALT;
+  const ctx = canvas.getContext('2d');
+  const { traco, sombra } = fundo(ctx, modelo, foto);
+  const d = new Date(rd.inicio);
+  ctx.textAlign = 'center';
+  if (sombra) { ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 3; }
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '700 48px Barlow, system-ui, sans-serif';
+  ctx.letterSpacing = '4px';
+  ctx.fillText('MEU RENDIMENTO', LARG / 2, 250);
+  ctx.letterSpacing = '0px';
+  ctx.font = '600 44px Barlow, system-ui, sans-serif';
+  ctx.fillText(`desde ${F.diaMes(d)}/${d.getFullYear()} · ${rd.dias} ${rd.dias === 1 ? 'dia' : 'dias'}`, LARG / 2, 320);
+  const { numeros, destaque } = numerosRendimento(rd);
+  let y = 470;
+  for (const n of numeros) {
+    ctx.font = '600 46px Barlow, system-ui, sans-serif';
+    ctx.fillText(n.rotulo, LARG / 2, y);
+    ctx.font = '800 136px Barlow, system-ui, sans-serif';
+    ctx.fillText(n.valor, LARG / 2, y + 140);
+    y += 270;
+  }
+  if (destaque) {
+    ctx.font = '800 58px Barlow, system-ui, sans-serif';
+    ctx.fillText(destaque, LARG / 2, y + 30);
+  }
+  ctx.shadowColor = 'transparent';
+  // Linha da distância somada
+  const ac = rd.acumulado || [];
+  if (ac.length >= 2) {
+    const caixa = { x: 170, y: 1380, w: 740, h: 230 };
+    const t0 = ac[0].t, t1 = ac[ac.length - 1].t, max = Math.max(1, ac[ac.length - 1].v);
+    if (sombra) { ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 14; }
+    ctx.beginPath();
+    ac.forEach((p, i) => {
+      const x = caixa.x + (t1 > t0 ? (p.t - t0) / (t1 - t0) : 0.5) * caixa.w, yy = caixa.y + (1 - p.v / max) * caixa.h;
+      if (i) ctx.lineTo(x, yy); else ctx.moveTo(x, yy);
+    });
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.lineWidth = 14; ctx.strokeStyle = traco; ctx.stroke();
+    ctx.shadowColor = 'transparent';
+  }
+  marcaApp(ctx, nome, sombra);
+  return canvas;
 }
 
 /**

@@ -1,6 +1,6 @@
 {
   "name": "hodometro",
-  "version": "1.3.2",
+  "version": "1.4.0",
   "private": true,
   "description": "Hodômetro de bike: grava o pedal pelo GPS, funciona offline. Web (PWA) e app Android.",
   "type": "module",

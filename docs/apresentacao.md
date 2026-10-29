@@ -65,8 +65,15 @@ apresentação para cada, e a recomendação final.
 - `android/app/src/main/res/values/strings.xml`: `app_name` e `title_activity_main`
 - `android/app/src/main/java/io/github/diegopayday/hodometro/GravadorService.java`:
   o texto "Abra o Hodômetro para atualizar os números"
-- `.github/workflows/android.yml`: o título da versão (`--title`)
-- `README.md`
+- `GravadorPlugin.java`: as mensagens "O Hodômetro precisa da localização precisa"
+- `js/story.js`, `js/formato.js` e `js/gpx.js`: o nome padrão (o app passa `NOME_APP`,
+  mas o padrão aparece se alguém chamar sem ele)
+- `package.json`: `description`
+- `.github/workflows/android.yml`: o título da versão (`--title`). O arquivo
+  `Hodometro.apk` pode ficar com o nome antigo: é o link que já está nos celulares.
+- `README.md`, `GEMINI.md`, `AGENTS.md`
+
+Ícone: `python ferramentas/icone.py caminho/da/logo.png` troca todos os tamanhos.
 
 **Não mude** o `applicationId` (`io.github.diegopayday.hodometro`), a chave de
 assinatura (`android/app/hodometro.keystore`), o nome do banco (`hodometro` em

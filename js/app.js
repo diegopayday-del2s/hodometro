@@ -9,14 +9,16 @@ import { vibrar, temVibracao } from './vibra.js';
 import { gerarGPX, converterGPXEmPedal, pedalRepetido } from './gpx.js';
 import { desenharTrajeto, graficoVelocidade, graficoElevacao } from './desenho.js';
 import { trajetoNoMapa, posicaoNoMapa } from './mapa.js';
-import { desenharStory, pngBase64 } from './story.js';
+import { desenharStory, desenharStoryRendimento, pngBase64 } from './story.js';
 import { progresso, resumoProgresso, avaliarMeta, PERIODOS } from './progresso.js';
 import { organizarRotas, estatisticasRota, rotaDoPedal, GuiaRota } from './rotas.js';
-import { graficoProgresso, histogramaHoras, anel } from './graficos.js';
+import { rendimento, destaques } from './rendimento.js';
+import { novoPerfil, nomeAmigo, gerarPacote, lerPacote, juntarAmigo, ranking, companhia, juntos, comparar, rankingRota } from './amigos.js';
+import { graficoProgresso, histogramaHoras, anel, graficoAcumulado, graficoEvolucao, barrasSemanas } from './graficos.js';
 import { $, $$, h, icone, aviso, confirmar, pedirTexto, segurarPara, quandoAparecer } from './ui.js';
 import { NOME_APP } from './marca.js';
 
-export const VERSAO = '1.3.2';
+export const VERSAO = '1.4.0';
 
 // No app Android o GPS vem do chip e segue com a tela apagada; no navegador, não
 const NATIVO = ehNativo();
@@ -49,6 +51,16 @@ function lerCfg() {
 }
 function salvarCfg() { try { localStorage.setItem('hodometro.cfg', JSON.stringify(S.cfg)); } catch { /* sem espaço */ } }
 
+// ---------- você para os amigos ----------
+function lerPerfil() {
+  try {
+    const p = JSON.parse(localStorage.getItem('hodometro.perfil') || 'null');
+    if (p && typeof p.id === 'string') return { id: p.id, nome: typeof p.nome === 'string' ? p.nome : '' };
+  } catch { /* começa sem perfil */ }
+  return null;
+}
+function salvarPerfil() { try { localStorage.setItem('hodometro.perfil', JSON.stringify(S.perfil)); } catch { /* sem espaço */ } }
+
 const S = {
   cfg: lerCfg(),
   pedais: [],
@@ -56,7 +68,7 @@ const S = {
   tentativas: {},
   tela: 'inicio',
   telaAntes: 'inicio',
-  sub: 'progresso',
+  sub: 'rendimento',
   metrica: 'distancia',
   periodo: 'tri',
   comparar: true,
@@ -82,6 +94,10 @@ const S = {
   notifEm: 0,
   recuperando: false,
   fila: [],
+  perfil: lerPerfil(),   // você para os amigos: {id, nome}
+  amigos: [],         // amigos e os pedais que eles mandaram (nunca entram em S.pedais)
+  rk: 'semana',       // período do ranking dos amigos
+  amigoAberto: null,
 };
 const gps = NATIVO ? new FonteNativa() : new FonteGPS();
 salvarCfg();
@@ -114,6 +130,23 @@ const temTrajeto = p => (p.pontos || []).length > 2;
 const nomeRota = r => r.nome || `Caminho de ${F.km1(r.dist)} km`;
 const rotasVisiveis = () => S.rotas.filter(r => !r.oculta);
 const rotaDoPedalId = id => S.rotas.find(r => !r.oculta && (S.tentativas[r.id] || []).includes(id)) || null;
+/** Pedal de amigo pronto para as telas: marcado com quem fez (só na memória, nunca salvo assim). */
+const comoAmigo = (p, a) => ({ ...p, amigo: { id: a.id, nome: nomeAmigo(a) } });
+const pedaisDosAmigos = () => S.amigos.flatMap(a => (a.pedais || []).map(p => comoAmigo(p, a)));
+const nomeEu = () => (S.perfil && S.perfil.nome) || 'Você';
+/** Nome na linha de um ranking: "Ana (você)", ou só "Você" antes de escolher o nome. */
+const rotuloEu = l => (!l.voce ? l.nome : S.perfil && S.perfil.nome ? `${l.nome} (você)` : 'Você');
+
+function corAvatar(id) {
+  let n = 0;
+  for (const c of String(id)) n = (n * 31 + c.charCodeAt(0)) >>> 0;
+  return 'av-' + (n % 4);
+}
+/** Bolinha com a inicial. id 'eu' fica laranja; amigos têm cor fixa pelo id. */
+function avatar(nome, id, cls = '') {
+  return h('span', { class: `avatar ${id === 'eu' ? 'voce' : corAvatar(id)} ${cls}`.trim(), 'aria-hidden': 'true', text: String(nome || '?').trim().charAt(0) || '?' });
+}
+const slug = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'amigo';
 
 /** Pedal lançado à mão, sem trajeto. `hora` "HH:MM" opcional; sem ela fica ao meio-dia. */
 function pedalManual(dia, metros, segundos, nota, hora) {
@@ -158,6 +191,7 @@ function posicaoNaRota(rota, p) {
 /** Selos do pedal: rota e recordes. */
 function selosPedal(p, comMarcas = true) {
   const selos = [];
+  if (p.amigo) return selos;
   const rota = rotaDoPedalId(p.id);
   if (rota) {
     const pos = posicaoNaRota(rota, p);
@@ -168,6 +202,7 @@ function selosPedal(p, comMarcas = true) {
   if (varios && r.maiorDistancia && r.maiorDistancia.id === p.id) selos.push(h('span', { class: 'selo laranja' }, icone('trofeu'), 'Maior pedal'));
   if (varios && r.maiorVel && r.maiorVel.id === p.id) selos.push(h('span', { class: 'selo laranja' }, icone('trofeu'), 'Maior velocidade'));
   if (varios && r.maiorMedia && r.maiorMedia.id === p.id) selos.push(h('span', { class: 'selo laranja' }, icone('trofeu'), 'Maior média'));
+  for (const { amigo } of companhia(p, S.amigos)) selos.push(h('span', { class: 'selo' }, icone('amigos'), `com ${nomeAmigo(amigo)}`));
   if (comMarcas && p.demo) selos.push(h('span', { class: 'selo', text: 'demonstração' }));
   if (comMarcas && p.via === 'manual') selos.push(h('span', { class: 'selo', text: 'sem GPS' }));
   return selos;
@@ -537,7 +572,7 @@ function mostrarTela(nome) {
   if (S.r && nome !== 'gravar') nome = 'gravar';
   if (nome === 'ajustes' && S.tela !== 'ajustes') S.telaAntes = S.tela;
   S.tela = nome;
-  for (const [t, id] of [['inicio', '#telaInicio'], ['rotas', '#telaRotas'], ['gravar', '#telaGravar'], ['voce', '#telaVoce'], ['ajustes', '#telaAjustes']]) $(id).hidden = nome !== t;
+  for (const [t, id] of [['inicio', '#telaInicio'], ['rotas', '#telaRotas'], ['gravar', '#telaGravar'], ['amigos', '#telaAmigos'], ['voce', '#telaVoce'], ['ajustes', '#telaAjustes']]) $(id).hidden = nome !== t;
   document.body.classList.toggle('ajustes', nome === 'ajustes');
   $$('#abas button').forEach(b => { if (b.dataset.tela === nome) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
   if (nome === 'gravar') { aquecerGPS(); conferirPermissoes(); }
@@ -554,6 +589,7 @@ function render() {
   if (S.tela === 'inicio') renderInicio();
   if (S.tela === 'rotas') renderRotas();
   if (S.tela === 'gravar') { if (S.r) renderPainel(); else renderGravar(); }
+  if (S.tela === 'amigos') renderAmigos();
   if (S.tela === 'voce') renderVoce();
   if (S.tela === 'ajustes') renderAjustes();
 }
@@ -576,6 +612,7 @@ function cardAtividade(p) {
   const selos = selosPedal(p, false);
   const card = h('button', { type: 'button', class: 'card', onclick: () => abrirDetalhe(p) },
     h('span', { class: 'card-corpo' },
+      p.amigo ? h('span', { class: 'card-autor' }, avatar(p.amigo.nome, p.amigo.id, 'pequeno'), p.amigo.nome) : null,
       h('span', { class: 'card-topo' }, h('b', { text: tituloPedal(p) }), h('span', { text: quandoPedal(p) + (p.demo ? ' · demonstração' : '') })),
       h('span', { class: 'card-dados' },
         dado('Distância', `${F.km2(p.distancia)} km`),
@@ -604,7 +641,8 @@ function renderInicio() {
       h('b', { text: m.batida ? 'Meta da semana batida!' : `Faltam ${valorMeta(m.falta, meta.tipo)} para a meta` }),
       h('span', { text: `${valorMeta(m.feito, meta.tipo)} de ${valorMeta(m.alvo, meta.tipo)}` })));
   }
-  const lista = S.pedais.slice().sort((a, b) => b.inicio - a.inicio).slice(0, 15);
+  $('#feedTitulo').textContent = S.amigos.length ? 'Atividades' : 'Suas atividades';
+  const lista = [...S.pedais, ...pedaisDosAmigos()].sort((a, b) => b.inicio - a.inicio).slice(0, 15);
   $('#feed').replaceChildren(...(lista.length ? lista.map(cardAtividade) : [h('div', { class: 'vazio' },
     h('p', { text: 'Nenhum pedal ainda. Toque em Gravar para o primeiro, ou faça uma simulação em Ajustes.' }),
     h('button', { type: 'button', class: 'btn-pilula', text: 'Gravar', onclick: () => mostrarTela('gravar') }))]));
@@ -878,10 +916,96 @@ function valorMeta(v, tipo) {
 
 function renderVoce() {
   $$('.abas-topo button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.sub === S.sub)));
+  $('#subRendimento').hidden = S.sub !== 'rendimento';
   $('#subProgresso').hidden = S.sub !== 'progresso';
   $('#subAtividades').hidden = S.sub !== 'atividades';
-  if (S.sub === 'progresso') renderProgresso();
+  if (S.sub === 'rendimento') renderRendimento();
+  else if (S.sub === 'progresso') renderProgresso();
   else renderAtividades();
+}
+
+/** "em uns 5 dias", "em umas 3 semanas", "em uns 4 meses". */
+function prazo(dias) {
+  if (dias <= 14) return `em ${dias <= 1 ? '1 dia' : `uns ${dias} dias`}`;
+  if (dias <= 90) return `em umas ${Math.round(dias / 7)} semanas`;
+  const m = Math.round(dias / 30);
+  return m <= 24 ? `em uns ${m} meses` : `em uns ${Math.round(dias / 365)} anos`;
+}
+
+const umaCasa = v => F.km1(v * 1000);
+const varTxt = v => (v == null ? '' : Math.round(Math.abs(v) * 100) === 0 ? '= 0%' : `${v > 0 ? '▲' : '▼'} ${Math.round(Math.abs(v) * 100)}%`);
+const varCls = v => 'var ' + (v == null || Math.round(Math.abs(v) * 100) === 0 ? '' : v > 0 ? 'sobe' : 'desce');
+
+// ----- Rendimento: desde o primeiro pedal -----
+function renderRendimento() {
+  const rd = rendimento(S.pedais, { rotas: S.rotas, tentativas: S.tentativas });
+  $('#rdVazio').hidden = !rd.vazio;
+  $('#rdConteudo').hidden = rd.vazio;
+  if (rd.vazio) return;
+  const d = new Date(rd.inicio);
+  $('#rdDesde').textContent = `Desde ${F.diaMes(d)}${d.getFullYear() !== new Date().getFullYear() ? `/${d.getFullYear()}` : ''}, o seu primeiro pedal`;
+  $('#rdKm').textContent = F.km1(rd.total.distancia);
+  $('#rdSub').textContent = `${plural(rd.n, 'pedal', 'pedais')} em ${plural(rd.dias, 'dia', 'dias')}, ${plural(rd.diasAtivos, 'dia pedalado', 'dias pedalados')}`;
+  $('#rdTempo').textContent = F.tempoCurto(rd.total.tempoMov);
+  $('#rdMedia').replaceChildren(rd.total.velMedia > 0 ? F.kmh(rd.total.velMedia) : '--', rd.total.velMedia > 0 ? h('small', { text: ' km/h' }) : null);
+  $('#rdSubida').textContent = `${F.inteiro(rd.total.subida)} m`;
+
+  const frases = destaques(rd, { kmh: F.kmh, km1: F.km1, duracao: F.tempoCurto, nomeRota });
+  if (!frases.length) frases.push({ tipo: 'neutro', texto: rd.n < 2 ? 'Com o segundo pedal, aqui aparece se a sua média e a distância dos pedais estão subindo.' : 'Seu ritmo está estável: média e distância dos pedais parecidas desde o começo.' });
+  $('#rdDestaques').replaceChildren(...frases.map(f => h('li', { class: f.tipo, text: f.texto })));
+
+  $('#rdAcLeitura').textContent = 'Toque no gráfico para ver cada dia.';
+  $('#rdAcumulado').replaceChildren(graficoAcumulado(rd.acumulado, { leitura: $('#rdAcLeitura') }));
+  $('#rdEvolucaoBloco').hidden = rd.evolucao.length < 2;
+  if (rd.evolucao.length >= 2) {
+    $('#rdEvLeitura').textContent = 'Cada ponto é um pedal com GPS de 1 km ou mais. O tracejado mostra a tendência.';
+    $('#rdEvolucao').replaceChildren(graficoEvolucao(rd.evolucao, rd.tendencia, { leitura: $('#rdEvLeitura') }));
+  }
+  $('#rdSemLado').textContent = `média de ${F.km1(rd.porSemana)} km`;
+  $('#rdSemLeitura').textContent = 'Toque numa barra para ver a semana.';
+  $('#rdSemanas').replaceChildren(barrasSemanas(rd.semanas, { leitura: $('#rdSemLeitura') }));
+
+  // Começo e agora
+  const linhas = [];
+  if (rd.velocidade) linhas.push(['Vel. média', F.kmh(rd.velocidade.de), F.kmh(rd.velocidade.para), 'km/h', rd.velocidade.variacao]);
+  if (rd.distancia) linhas.push(['Distância por pedal', F.km1(rd.distancia.de), F.km1(rd.distancia.para), 'km', rd.distancia.variacao]);
+  $('#rdComparaBloco').hidden = !linhas.length;
+  if (linhas.length) {
+    const k = (rd.distancia || rd.velocidade).k;
+    $('#rdComparaLado').textContent = k === 1 ? 'primeiro e último pedal' : `${k} primeiros e ${k} últimos`;
+    $('#rdCompara').replaceChildren(
+      h('div', { class: 'compara-linha cab' }, h('span', {}), h('span', { text: 'Começo' }), h('span', { text: 'Agora' }), h('span', {})),
+      ...linhas.map(([rot, de, para, unid, v]) => h('div', { class: 'compara-linha' },
+        h('span', { text: rot }), h('b', {}, de, h('small', { text: unid })), h('b', {}, para, h('small', { text: unid })), h('span', { class: varCls(v), text: varTxt(v) }))));
+  }
+
+  // Próximo marco
+  const m = rd.marco;
+  const kmFeito = rd.total.distancia / 1000;
+  const porSemana = rd.porSemana;
+  $('#rdMarco').replaceChildren(anel((kmFeito - m.anterior) / (m.alvo - m.anterior)), h('div', {},
+    h('b', { text: `${F.inteiro(m.alvo)} km no total` }),
+    h('span', { class: 'feito', text: `Faltam ${F.km1(m.falta)} km` }),
+    m.dias ? h('span', { text: `No seu ritmo, ${F.km1(porSemana)} km por semana, você chega lá ${prazo(m.dias)}.` }) : null));
+
+  // Rotas em que melhorou
+  const mr = rd.melhorasRota.slice(0, 5);
+  $('#rdRotasBloco').hidden = !mr.length;
+  $('#rdRotas').replaceChildren(...mr.map(x => h('button', { type: 'button', class: 'tentativa', onclick: () => abrirRota(x.rota) },
+    h('span', { class: 'pos', text: `${x.vezes}x` }),
+    h('span', {}, h('b', { text: nomeRota(x.rota) }), h('span', { text: `1ª vez ${F.duracao(x.primeiro)} · melhor ${F.duracao(x.melhor)}` })),
+    h('b', { class: x.ganho > 0 ? 'ganho' : null, text: x.ganho > 0 ? `−${F.tempoCurto(x.ganho)}` : 'igual' }))));
+
+  // Constância
+  const c = (k, v, unid, sub) => h('div', {}, h('span', { class: 'k', text: k }), h('span', { class: 'v' }, v, unid ? h('small', { text: unid }) : null), h('span', { class: 's', text: sub }));
+  const ms = rd.melhorSemana;
+  $('#rdConstancia').replaceChildren(
+    c('Dias pedalados', F.inteiro(rd.diasAtivos), '', `de ${plural(rd.dias, 'dia', 'dias')} desde o começo`),
+    c('Semanas seguidas', F.inteiro(rd.semanasSeguidas), '', `a maior foi de ${plural(rd.maiorSequenciaSemanas, 'semana', 'semanas')}`),
+    c('Pedais por semana', umaCasa(rd.pedaisPorSemana), '', `${F.km1(rd.porPedal)} km por pedal`),
+    c('Melhor semana', ms ? F.km1(ms.distancia) : '--', ms ? 'km' : '', ms ? `semana de ${F.diaMes(new Date(ms.ini))}` : ''),
+    c('Dias seguidos', F.inteiro(rd.maiorSequenciaDias), '', 'a maior sequência'),
+    c('Km por semana', F.km1(rd.porSemana), 'km', 'média desde o começo'));
 }
 
 function renderProgresso() {
@@ -912,13 +1036,6 @@ function renderProgresso() {
   $('#progResumo').textContent = resumoProgresso(pg);
   renderMetas();
   renderRecordes();
-  const validos = S.pedais.filter(p => !p.demo);
-  const tot = F.somar(validos);
-  const desde = validos.reduce((m2, p) => Math.min(m2, p.inicio), Infinity);
-  $('#estDesde').textContent = Number.isFinite(desde) ? `desde ${F.rotuloDia(desde)}` : '';
-  $('#estKm').textContent = `${F.km1(tot.distancia)} km`;
-  $('#estHoras').textContent = F.tempoCurto(tot.tempoMov);
-  $('#estN').textContent = String(tot.n);
 }
 
 function renderMetas() {
@@ -1011,6 +1128,9 @@ function renderAjustes() {
   $('#blocoBateria').hidden = !NATIVO;
   $('#btnBateria').textContent = S.perm.bateria ? 'Bateria já liberada' : 'Liberar a bateria';
   if (NATIVO) $('#txtTela').innerHTML = '<b>Tela bloqueada:</b> o app Android grava com a tela apagada e o celular no bolso. Um serviço do Android mantém o GPS e o processador ligados, e a notificação mostra distância, tempo em movimento e velocidade na tela de bloqueio. Se o app for fechado no meio, o serviço continua gravando e o app recupera tudo ao abrir.';
+  const info = infoCopia();
+  $('#blocoCopia').hidden = !info || !info.n;
+  if (info && info.n) $('#copiaTxt').textContent = `Feita ${emDia(info.feitaEm)} ao atualizar o app, com ${plural(info.n, 'pedal', 'pedais')}. Restaurar só devolve o que faltar: nada é apagado.`;
   $('#versao').textContent = NATIVO ? `Versão ${VERSAO} do app Android. Funciona sem internet.` : `Versão ${VERSAO}. Funciona offline depois de aberto uma vez.`;
 }
 
@@ -1033,11 +1153,13 @@ function fecharSobreposta() {
   if (id === '#detalhe') S.detalhe = null;
   if (id === '#rotaDetalhe') S.rotaAberta = null;
   if (id === '#story') S.story = null;
+  if (id === '#amigoDetalhe') S.amigoAberto = null;
   if (!S.pilha.length) {
     document.body.classList.remove('sobre');
     render();
     aquecerGPS();
   } else if (S.pilha[S.pilha.length - 1] === '#rotaDetalhe' && S.rotaAberta) abrirRota(S.rotaAberta, true);
+  else if (S.pilha[S.pilha.length - 1] === '#amigoDetalhe' && S.amigoAberto) renderAmigo(S.amigoAberto);
 }
 
 /**
@@ -1081,6 +1203,13 @@ function abrirDetalhe(p) {
   } else celulas.push(cel('Ritmo', F.ritmo(ritmo), '/km'));
   $('#dNumeros').replaceChildren(...celulas);
   $('#dSelos').replaceChildren(...selosPedal(p));
+  const deAmigo = !!p.amigo;
+  $('#dAutor').hidden = !deAmigo;
+  if (deAmigo) $('#dAutor').replaceChildren(avatar(p.amigo.nome, p.amigo.id, 'pequeno'), h('span', { text: `Pedal de ${p.amigo.nome}` }));
+  for (const id of ['#btnRenomear', '#btnStory', '#btnStoryTopo', '#btnApagar', '#btnCompartilhar']) $(id).hidden = deAmigo;
+  $('#btnVerAmigo').hidden = !deAmigo;
+  if (deAmigo) $('#btnVerAmigo').textContent = `Ver ${p.amigo.nome}`;
+  renderJuntos(p);
   const temPontos = temTrajeto(p);
   const mapa = $('#dMapa');
   mapa.hidden = !temPontos;
@@ -1129,18 +1258,61 @@ function abrirDetalhe(p) {
   else if (p.nota) notas.push(`Nota: ${p.nota}`);
   $('#dNotas').textContent = notas.join(' ');
   $('#dNotas').hidden = !notas.length;
-  $('#btnGpx').hidden = !temPontos;
-  const rota = rotaDoPedalId(p.id);
-  $('#btnSalvarRota').hidden = !temPontos || p.demo;
+  $('#btnGpx').hidden = !temPontos || deAmigo;
+  const rota = deAmigo ? null : rotaDoPedalId(p.id);
+  $('#btnSalvarRota').hidden = !temPontos || p.demo || deAmigo;
   $('#btnSalvarRota').textContent = rota ? 'Ver a rota' : 'Salvar como rota';
 
   abrirSobreposta('#detalhe');
   if (temPontos) requestAnimationFrame(() => desenharMapaPedal(mapa, p.pontos, (p.lacunas || []).map(l => l.i)));
 }
 
+/** O mesmo pedal gravado no seu celular e no de um amigo, lado a lado. */
+function renderJuntos(p) {
+  let pares;
+  if (p.amigo) {
+    const meu = S.pedais.find(m => !m.demo && juntos(m, p));
+    const a = S.amigos.find(x => x.id === p.amigo.id);
+    pares = meu && a ? [{ meu, amigo: a, deles: p }] : [];
+  } else pares = companhia(p, S.amigos).map(({ amigo, pedal }) => ({ meu: p, amigo, deles: pedal }));
+  $('#dJuntosBloco').hidden = !pares.length;
+  if (!pares.length) return;
+  $('#dJuntosTitulo').textContent = pares.length === 1 ? `Junto com ${nomeAmigo(pares[0].amigo)}` : 'Pedalaram juntos';
+  $('#dJuntos').replaceChildren(...pares.map(({ meu, amigo, deles }) => {
+    const c = comparar(meu, deles);
+    const nome = nomeAmigo(amigo);
+    const pct = v => (v == null ? '' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.round(Math.abs(v) * 1000) / 10}%`.replace('.', ','));
+    const seg = v => (Math.abs(v) < 1 ? 'igual' : `${v > 0 ? '+' : '−'}${F.tempoCurto(Math.abs(v))}`);
+    const linha = (rot, eu, ele, unid, dif) => h('div', { class: 'compara-linha' }, h('span', { text: rot }), h('b', {}, eu, unid ? h('small', { text: unid }) : null), h('b', {}, ele, unid ? h('small', { text: unid }) : null), h('span', { class: 'var', text: dif }));
+    return h('div', { class: 'bloco' },
+      h('div', { class: 'compara' },
+        h('div', { class: 'compara-linha cab' }, h('span', {}), h('span', { text: 'Você' }), h('span', { text: nome }), h('span', { text: 'Dif.' })),
+        linha('Distância', F.km2(c.distancia.eu), F.km2(c.distancia.ele), 'km', pct(c.distancia.pct)),
+        linha('Em movimento', F.duracao(c.tempoMov.eu), F.duracao(c.tempoMov.ele), '', seg(c.tempoMov.dif)),
+        linha('Vel. média', F.kmh(c.velMedia.eu), F.kmh(c.velMedia.ele), 'km/h', pct(c.velMedia.pct)),
+        linha('Vel. máxima', F.kmh(c.velMax.eu), F.kmh(c.velMax.ele), 'km/h', pct(c.velMax.pct)),
+        linha('Elevação', F.inteiro(c.subida.eu), F.inteiro(c.subida.ele), 'm', `${c.subida.dif > 0 ? '+' : c.subida.dif < 0 ? '−' : ''}${F.inteiro(Math.abs(c.subida.dif))} m`)),
+      h('p', { class: 'hint', text: explicarDiferenca(c) }),
+      h('button', { type: 'button', class: 'btn2', text: p.amigo ? 'Ver o seu pedal' : `Ver o pedal de ${nome}`, onclick: () => abrirDetalhe(p.amigo ? meu : comoAmigo(deles, amigo)) }));
+  }));
+}
+
+/** Por que o mesmo pedal deu números diferentes nos dois celulares. */
+function explicarDiferenca(c) {
+  const pct = Math.abs(c.distancia.pct || 0);
+  const txt = `${Math.round(pct * 1000) / 10}%`.replace('.', ',');
+  let t;
+  if (pct < 0.005) t = 'Os dois celulares mediram praticamente a mesma distância.';
+  else if (pct <= 0.03) t = `Diferença de ${txt} na distância: normal entre dois celulares. Cada GPS tem a sua precisão, e o lugar do aparelho (bolso, mochila ou guidão) muda um pouco o traçado.`;
+  else if (pct <= 0.08) t = `Diferença de ${txt} na distância, um pouco acima do normal. Pode ser um celular que começou antes ou terminou depois, ou um trecho sem sinal em um deles.`;
+  else t = `Diferença grande, de ${txt}. Um dos celulares provavelmente começou depois, terminou antes ou ficou sem sinal em parte do caminho.`;
+  if (Math.abs(c.tempoMov.dif) >= 60) t += ' O tempo em movimento muda porque cada celular faz a sua pausa automática nos semáforos.';
+  return t;
+}
+
 async function renomearPedal() {
   const p = S.detalhe;
-  if (!p) return;
+  if (!p || p.amigo) return;
   const nome = await pedirTexto('Nome do pedal', tituloPedal(p), 'Por exemplo: Lavrinha com a turma.');
   if (nome == null) return;
   if (nome) p.nome = nome.slice(0, 60);
@@ -1206,6 +1378,12 @@ function abrirRota(r, soAtualizar = false) {
 
   const ordem = e.pedais.filter(p => p.tempoMov > 0).sort((a, b) => a.tempoMov - b.tempoMov).map(p => p.id);
   const medalha = ['ouro', 'prata', 'bronze'];
+  const rk = S.amigos.length ? rankingRota(r, S.tentativas[r.id] || [], S.pedais, S.amigos, nomeEu()) : [];
+  $('#rRankingBloco').hidden = !rk.some(l => !l.voce);
+  $('#rRanking').replaceChildren(...rk.map((l, i) => h('button', { type: 'button', class: 'tentativa', onclick: () => abrirDetalhe(l.voce ? l.pedal : comoAmigo(l.pedal, l.amigo)) },
+    h('span', { class: 'pos ' + (i < 3 ? medalha[i] : ''), text: `${i + 1}º` }),
+    h('span', {}, h('b', { text: rotuloEu(l) }), h('span', { text: `${F.rotuloDia(l.pedal.inicio)} · ${F.kmh(l.pedal.distancia / l.tempo)} km/h` })),
+    h('b', { text: F.duracao(l.tempo) }))));
   $('#rTentativas').replaceChildren(...(e.pedais.length ? e.pedais.slice().reverse().map(p => {
     const pos = ordem.indexOf(p.id);
     return h('button', { type: 'button', class: 'tentativa', onclick: () => abrirDetalhe(p) },
@@ -1245,7 +1423,14 @@ async function excluirRota() {
 
 // ----- Stories -----
 async function abrirStory(p) {
-  S.story = { pedal: p, modelo: 'laranja', foto: null };
+  S.story = { tipo: 'pedal', pedal: p, modelo: 'laranja', foto: null };
+  abrirSobreposta('#story');
+  await renderStory();
+}
+async function abrirStoryRendimento() {
+  const rd = rendimento(S.pedais, { rotas: S.rotas, tentativas: S.tentativas });
+  if (rd.vazio) { aviso('Grave um pedal para ter o que compartilhar.'); return; }
+  S.story = { tipo: 'rendimento', rd, modelo: 'laranja', foto: null };
   abrirSobreposta('#story');
   await renderStory();
 }
@@ -1257,24 +1442,27 @@ async function renderStory() {
   $('#storyDica').textContent = st.modelo === 'transparente'
     ? 'Fundo transparente: no Instagram, cole por cima de uma foto sua.'
     : st.modelo === 'foto' ? (st.foto ? 'Pronto. Troque a foto quando quiser.' : 'Escolha uma foto da galeria para o fundo.') : 'Pronto para os stories.';
-  await desenharStory($('#storyCanvas'), st.pedal, { modelo: st.modelo, foto: st.foto, nome: NOME_APP });
+  if (st.tipo === 'rendimento') await desenharStoryRendimento($('#storyCanvas'), st.rd, { modelo: st.modelo, foto: st.foto, nome: NOME_APP });
+  else await desenharStory($('#storyCanvas'), st.pedal, { modelo: st.modelo, foto: st.foto, nome: NOME_APP });
 }
 async function enviarStory() {
   const st = S.story;
   if (!st) return;
   const canvas = $('#storyCanvas');
-  const nome = `pedal-${F.chaveDia(st.pedal.inicio)}.png`;
+  const rend = st.tipo === 'rendimento';
+  const nome = rend ? `rendimento-${F.chaveDia(Date.now())}.png` : `pedal-${F.chaveDia(st.pedal.inicio)}.png`;
+  const titulo = rend ? 'Meu rendimento' : 'Meu pedal';
   if (NATIVO) {
     try {
       const { uri } = await chamar('Filesystem', 'writeFile', { path: nome, data: pngBase64(canvas), directory: 'CACHE' });
-      await chamar('Share', 'share', { title: 'Meu pedal', files: [uri], dialogTitle: 'Compartilhar nos stories' });
+      await chamar('Share', 'share', { title: titulo, files: [uri], dialogTitle: 'Compartilhar nos stories' });
     } catch (e) { if (!/cancel/i.test(String(e && e.message))) aviso('Não consegui compartilhar a imagem. Tente de novo.'); }
     return;
   }
   const blob = await new Promise(ok => canvas.toBlob(ok, 'image/png'));
   const arquivo = new File([blob], nome, { type: 'image/png' });
   try {
-    if (navigator.canShare && navigator.canShare({ files: [arquivo] })) { await navigator.share({ files: [arquivo], title: 'Meu pedal' }); return; }
+    if (navigator.canShare && navigator.canShare({ files: [arquivo] })) { await navigator.share({ files: [arquivo], title: titulo }); return; }
   } catch (e) { if (e && e.name === 'AbortError') return; }
   const url = URL.createObjectURL(blob);
   const a = h('a', { href: url, download: nome });
@@ -1288,11 +1476,11 @@ async function enviarStory() {
  * compartilhar (salvar no Drive, mandar no WhatsApp, abrir no Strava).
  * No navegador, tenta compartilhar e, se não der, baixa.
  */
-async function entregarArquivo(texto, nome, tipo) {
+async function entregarArquivo(texto, nome, tipo, mensagem = '') {
   if (NATIVO) {
     try {
       const { uri } = await chamar('Filesystem', 'writeFile', { path: nome, data: texto, directory: 'CACHE', encoding: 'utf8' });
-      await chamar('Share', 'share', { title: nome, files: [uri], dialogTitle: 'Salvar ou enviar' });
+      await chamar('Share', 'share', { title: nome, ...(mensagem ? { text: mensagem } : {}), files: [uri], dialogTitle: mensagem ? 'Mandar para um amigo' : 'Salvar ou enviar' });
       return 'compartilhado';
     } catch (e) {
       if (/cancel/i.test(String(e && e.message))) return 'cancelado';
@@ -1303,7 +1491,7 @@ async function entregarArquivo(texto, nome, tipo) {
   const blob = new Blob([texto], { type: tipo });
   try {
     const file = new File([blob], nome, { type: tipo });
-    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: nome }); return 'compartilhado'; }
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: nome, ...(mensagem ? { text: mensagem } : {}) }); return 'compartilhado'; }
   } catch (e) { if (e && e.name === 'AbortError') return 'cancelado'; }
   const url = URL.createObjectURL(blob);
   const a = h('a', { href: url, download: nome });
@@ -1321,18 +1509,277 @@ async function exportarGPX(p) {
   if (r === 'baixado') aviso('GPX salvo em Downloads. No Strava, use "Enviar atividade" para importar.');
 }
 
-async function compartilharResumo(p) {
-  const texto = F.resumoTexto(p, tituloPedal(p), NOME_APP);
+async function compartilharTexto(texto, titulo) {
   if (NATIVO) {
-    try { await chamar('Share', 'share', { title: 'Resumo do pedal', text: texto, dialogTitle: 'Compartilhar resumo' }); }
+    try { await chamar('Share', 'share', { title: titulo, text: texto, dialogTitle: titulo }); }
     catch (e) { if (!/cancel/i.test(String(e && e.message))) aviso('Não consegui abrir o compartilhar. Tente de novo.'); }
     return;
   }
   try {
-    if (navigator.share) { await navigator.share({ title: 'Resumo do pedal', text: texto }); return; }
+    if (navigator.share) { await navigator.share({ title: titulo, text: texto }); return; }
   } catch (e) { if (e && e.name === 'AbortError') return; }
-  try { await navigator.clipboard.writeText(texto); aviso('Resumo copiado. Cole no WhatsApp ou onde quiser.'); }
-  catch { aviso('Não consegui copiar o resumo.'); }
+  try { await navigator.clipboard.writeText(texto); aviso('Texto copiado. Cole no WhatsApp ou onde quiser.'); }
+  catch { aviso('Não consegui copiar o texto.'); }
+}
+const compartilharResumo = p => compartilharTexto(F.resumoTexto(p, tituloPedal(p), NOME_APP), 'Resumo do pedal');
+
+// ---------- amigos ----------
+async function carregarAmigos() {
+  try { S.amigos = (await A.lerEstado('amigos')) || []; } catch { S.amigos = []; }
+  if (!Array.isArray(S.amigos)) S.amigos = [];
+}
+async function salvarAmigos() {
+  try { await A.salvarEstado('amigos', S.amigos); return true; }
+  catch { aviso('Não consegui salvar os amigos no celular. Tente de novo.'); return false; }
+}
+
+/** Seu nome no ranking. Pergunta na primeira vez. Devolve false se a pessoa desistiu. */
+async function escolherNome(sempre = false) {
+  if (!sempre && S.perfil && S.perfil.nome) return true;
+  const nome = await pedirTexto('Seu nome no ranking', (S.perfil && S.perfil.nome) || '', 'É assim que os amigos veem você. Por exemplo: Ana.');
+  if (nome == null || (!nome && !(S.perfil && S.perfil.nome))) return false;
+  if (!S.perfil) S.perfil = novoPerfil();
+  if (nome) S.perfil.nome = nome.slice(0, 40);
+  salvarPerfil();
+  render();
+  return true;
+}
+
+/** Arquivo com o seu rendimento, para o amigo abrir no app dele. */
+async function enviarRendimento() {
+  if (!S.pedais.some(p => !p.demo)) { aviso('Grave um pedal antes de mandar o seu rendimento.'); return; }
+  if (!(await escolherNome())) return;
+  const d = $('#dlgEnviar');
+  if (typeof d.showModal !== 'function') return;
+  d.returnValue = '';
+  const ok = await new Promise(fim => { d.addEventListener('close', () => fim(d.returnValue === 'sim'), { once: true }); d.showModal(); });
+  if (!ok) return;
+  const comTrajeto = (d.querySelector('input[name="enModo"]:checked') || {}).value !== 'numeros';
+  const pacote = gerarPacote(S.perfil, S.pedais, { comTrajeto });
+  const arquivo = `rendimento-${slug(S.perfil.nome)}-${F.chaveDia(Date.now())}.json`;
+  const msg = `Meu rendimento no ${NOME_APP}. Toque no arquivo e abra com o ${NOME_APP} para me adicionar nos amigos.`;
+  const r = await entregarArquivo(JSON.stringify(pacote), arquivo, 'application/json', msg);
+  if (r === 'baixado') aviso('Arquivo salvo em Downloads. Mande pelo WhatsApp para o amigo.');
+}
+
+const pedirRendimento = () => compartilharTexto(`Bora comparar os pedais? Me manda o seu rendimento do ${NOME_APP}: abra o app, toque em Amigos e depois em "Mandar meu rendimento".`, 'Pedir o rendimento');
+
+/** Arquivo de amigo recebido: entra na lista ou atualiza quem já estava. */
+async function receberAmigo(dados) {
+  let pacote;
+  try { pacote = lerPacote(dados); }
+  catch (e) { aviso(e.code === 'versao' ? 'Esse arquivo veio de uma versão mais nova do app. Atualize o app e abra de novo.' : 'Não consegui ler esse arquivo de amigo.'); return; }
+  if (S.perfil && pacote.perfil.id === S.perfil.id) { aviso('Esse arquivo é o seu próprio rendimento. Mande para um amigo abrir no app.'); return; }
+  const r = juntarAmigo(S.amigos, pacote);
+  const antes = S.amigos;
+  S.amigos = r.amigos;
+  if (!(await salvarAmigos())) { S.amigos = antes; return; }
+  const nome = nomeAmigo(r.amigo);
+  const nJuntos = S.pedais.filter(p => !p.demo && companhia(p, [r.amigo]).length).length;
+  aviso(`${r.novo ? `${nome} entrou nos seus amigos` : `${nome} atualizado`}: ${plural(r.novos, 'pedal novo', 'pedais novos')}${nJuntos ? `, ${plural(nJuntos, 'pedal junto com você', 'pedais juntos com você')}` : ''}.`, null, null, 7000);
+  if (S.r) return;
+  if (S.pilha.length) { S.depoisDeFechar = () => mostrarTela('amigos'); history.go(-S.pilha.length); }
+  else mostrarTela('amigos');
+}
+
+function renderAmigos() {
+  const nome = S.perfil && S.perfil.nome;
+  const av = $('#amAvatar');
+  av.textContent = nome ? nome.charAt(0) : '?';
+  $('#amNome').textContent = nome || 'Escolha o seu nome';
+  $('#amNomeSub').textContent = nome ? 'É assim que os amigos veem você no ranking.' : 'É o nome que aparece no ranking dos seus amigos.';
+  $('#btnNome').textContent = nome ? 'Mudar' : 'Escolher';
+
+  $$('#chipsRanking button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.rk === S.rk)));
+  $('#amRankingLado').textContent = { semana: 'distância nesta semana', mes: 'distância neste mês', total: 'distância desde o começo' }[S.rk];
+  const linhas = ranking({ nome: nomeEu(), pedais: S.pedais }, S.amigos, S.rk);
+  $('#amRanking').replaceChildren(...linhas.map((l, i) => h('button', {
+    type: 'button', class: 'rk' + (l.voce ? ' voce' : ''),
+    onclick: () => { if (l.voce) { S.sub = 'rendimento'; mostrarTela('voce'); } else abrirAmigo(S.amigos.find(a => a.id === l.id)); },
+  },
+  h('span', { class: 'pos', text: `${i + 1}º` }),
+  avatar(l.nome, l.voce ? 'eu' : l.id),
+  h('span', {}, h('b', { text: rotuloEu(l) }), h('small', { text: `${plural(l.n, 'pedal', 'pedais')}${l.tempoMov > 0 ? ` · ${F.tempoCurto(l.tempoMov)}` : ''}` })),
+  h('span', { class: 'km' }, F.km1(l.distancia), h('small', { text: 'km' })))));
+  $('#amRankingDica').textContent = S.amigos.length
+    ? 'Conta o que cada amigo mandou. Peça para mandarem de novo e o ranking atualiza.'
+    : 'Quando um amigo mandar o rendimento, ele aparece aqui junto com você.';
+
+  const recentes = pedaisDosAmigos().sort((a, b) => b.inicio - a.inicio).slice(0, 10);
+  $('#amFeedBloco').hidden = !recentes.length;
+  $('#amFeed').replaceChildren(...recentes.map(cardAtividade));
+
+  $('#amListaBloco').hidden = !S.amigos.length;
+  $('#amListaLado').textContent = plural(S.amigos.length, 'amigo', 'amigos');
+  $('#amLista').replaceChildren(...S.amigos.slice().sort((a, b) => nomeAmigo(a).localeCompare(nomeAmigo(b), 'pt-BR')).map(a => h('button', { type: 'button', class: 'amigo-linha', onclick: () => abrirAmigo(a) },
+    avatar(nomeAmigo(a), a.id),
+    h('span', {}, h('b', { text: nomeAmigo(a) }), h('small', { text: `${F.km1(a.resumo ? a.resumo.distancia : 0)} km desde o começo · atualizado ${emDia(a.recebidoEm)}` })),
+    h('span', { class: 'seta', text: '›' }))));
+}
+
+function abrirAmigo(a) {
+  if (!a) return;
+  if (voltarAte('#amigoDetalhe', () => abrirAmigo(a))) return;
+  S.amigoAberto = a;
+  renderAmigo(a);
+  abrirSobreposta('#amigoDetalhe');
+}
+
+function renderAmigo(a) {
+  const nome = nomeAmigo(a);
+  const av = $('#aAvatar');
+  av.className = `avatar grande ${corAvatar(a.id)}`;
+  av.textContent = nome.charAt(0);
+  $('#aTitulo').textContent = nome;
+  $('#aSub').textContent = `${a.apelido && a.apelido !== a.nome ? `No app: ${a.nome}. ` : ''}Mandou o rendimento ${emDia(a.enviadoEm || a.recebidoEm)}.`;
+  const r = a.resumo || {};
+  const cel = (k, v, unid) => h('div', {}, h('span', { class: 'k', text: k }), v === '--' ? h('span', { class: 'v nd', text: v }) : h('span', { class: 'v' }, v, unid ? h('small', { text: unid }) : null));
+  $('#aNumeros').replaceChildren(
+    cel('Desde o começo', F.km1(r.distancia || 0), 'km'),
+    cel('Pedais', F.inteiro(r.n || 0)),
+    cel('Tempo pedalando', r.tempoMov ? F.tempoCurto(r.tempoMov) : '--'),
+    cel('Vel. média', r.velMedia ? F.kmh(r.velMedia) : '--', 'km/h'),
+    cel('Maior pedal', r.maiorPedal ? F.km1(r.maiorPedal) : '--', 'km'),
+    cel('Pedala desde', r.desde ? F.rotuloDia(r.desde) : '--'));
+  const meusJuntos = S.pedais.filter(p => !p.demo && companhia(p, [a]).length).sort((x, y) => y.inicio - x.inicio);
+  $('#aJuntosBloco').hidden = !meusJuntos.length;
+  $('#aJuntosLado').textContent = plural(meusJuntos.length, 'pedal', 'pedais');
+  $('#aJuntos').replaceChildren(...meusJuntos.slice(0, 10).map(cardAtividade));
+  const deles = (a.pedais || []).map(p => comoAmigo(p, a));
+  $('#aPedaisLado').textContent = plural(deles.length, 'pedal', 'pedais');
+  $('#aPedais').replaceChildren(...(deles.length ? deles.map(cardAtividade) : [h('p', { class: 'hint', text: 'Nenhum pedal veio no arquivo.' })]));
+  $('#aDica').textContent = `Para atualizar, peça para ${nome} mandar o rendimento de novo. Os pedais de amigos ficam só aqui e não entram no seu progresso.`;
+}
+
+async function renomearAmigo() {
+  const a = S.amigoAberto;
+  if (!a) return;
+  const nome = await pedirTexto('Nome do amigo', nomeAmigo(a), 'Muda só aqui no seu celular.');
+  if (nome == null) return;
+  a.apelido = nome && nome !== a.nome ? nome.slice(0, 40) : null;
+  await salvarAmigos();
+  renderAmigo(a);
+}
+
+async function removerAmigo() {
+  const a = S.amigoAberto;
+  if (!a) return;
+  const nome = nomeAmigo(a);
+  const ok = await confirmar(`Remover ${nome}?`, `${nome} sai do ranking e os pedais recebidos saem deste celular. Os seus pedais não mudam.`, 'Remover');
+  if (!ok) return;
+  S.amigos = S.amigos.filter(x => x.id !== a.id);
+  await salvarAmigos();
+  history.back();
+  aviso(`${nome} saiu dos seus amigos.`);
+}
+
+// ---------- arquivos recebidos (amigo, backup ou GPX) ----------
+async function importarBackup(dados, feito = 'importado') {
+  const lista = Array.isArray(dados) ? dados : dados.pedais;
+  if (!Array.isArray(lista)) throw new Error('formato');
+  const validos = lista.filter(p => p && typeof p.id === 'string' && Number.isFinite(p.inicio) && Number.isFinite(p.distancia) && !p.amigo);
+  for (const p of validos) await A.salvarPedal(p);
+  S.pedais = await A.listarPedais();
+  const rotas = Array.isArray(dados.rotas) ? dados.rotas.filter(r => r && r.id && !S.rotas.some(x => x.id === r.id)) : [];
+  atualizarRotas([...S.rotas, ...rotas]);
+  salvarRotas();
+  if (Array.isArray(dados.amigos)) {
+    const novos = dados.amigos.filter(a => a && typeof a.id === 'string' && Array.isArray(a.pedais) && !S.amigos.some(x => x.id === a.id));
+    if (novos.length) { S.amigos = [...S.amigos, ...novos]; await salvarAmigos(); }
+  }
+  if (!S.perfil && dados.perfil && typeof dados.perfil.id === 'string') { S.perfil = { id: dados.perfil.id, nome: String(dados.perfil.nome || '').slice(0, 40) }; salvarPerfil(); }
+  render();
+  aviso(`${plural(validos.length, `pedal ${feito}`, `pedais ${feito}s`)}.`);
+}
+
+async function importarGPX(arquivos) {
+  let importados = 0, repetidos = 0;
+  for (const { nome, texto } of arquivos) {
+    try {
+      const pedal = converterGPXEmPedal(texto);
+      if (pedalRepetido(pedal, S.pedais)) { repetidos++; continue; }
+      await A.salvarPedal(pedal);
+      S.pedais.push(pedal);
+      importados++;
+    } catch (err) {
+      console.warn('Erro ao importar GPX:', nome, err);
+    }
+  }
+  const jaTinha = repetidos ? ` ${plural(repetidos, 'pedal já estava', 'pedais já estavam')} no app.` : '';
+  if (importados > 0) {
+    atualizarRotas();
+    aviso(`${plural(importados, 'pedal importado', 'pedais importados')}.${jaTinha}`);
+    render();
+  } else if (repetidos) {
+    aviso(`Nada novo para importar.${jaTinha}`);
+  } else {
+    aviso('Não consegui ler esse arquivo. Escolha um GPX com o trajeto do pedal.');
+  }
+}
+
+/** Arquivo aberto com o app (WhatsApp, Drive) ou escolhido em Amigos. */
+async function abrirArquivo(texto, nome = '') {
+  let dados = null;
+  try { dados = JSON.parse(texto); } catch { dados = null; }
+  if (dados && dados.tipo === 'amigo') { await receberAmigo(dados); return; }
+  if (dados && (Array.isArray(dados) || Array.isArray(dados.pedais))) {
+    const n = (Array.isArray(dados) ? dados : dados.pedais).length;
+    const ok = await confirmar('Importar este backup?', `${nome || 'O arquivo'} tem ${plural(n, 'pedal', 'pedais')}. Os pedais que você já tem continuam aqui.`, 'Importar', false);
+    if (ok) { try { await importarBackup(dados); } catch { aviso('Não consegui ler esse backup.'); } }
+    return;
+  }
+  if (/<gpx[\s>]/i.test(texto)) {
+    const ok = await confirmar('Importar este pedal?', `${nome || 'O GPX'} entra nos seus pedais, como se você tivesse gravado.`, 'Importar', false);
+    if (ok) await importarGPX([{ nome, texto }]);
+    return;
+  }
+  aviso('Esse arquivo não é do app. Abra o rendimento que o amigo mandou, um backup ou um GPX.');
+}
+
+/** No Android: arquivo que chegou pelo "Abrir com" ou "Compartilhar". */
+let lendoArquivo = false;
+async function verArquivoRecebido() {
+  if (!NATIVO || lendoArquivo) return;
+  lendoArquivo = true;
+  try {
+    const r = await chamar('Gravador', 'arquivoRecebido');
+    if (r && typeof r.texto === 'string' && r.texto) await abrirArquivo(r.texto, r.nome || '');
+  } catch {
+    aviso('Não consegui abrir o arquivo recebido. Salve o arquivo no celular e abra em Amigos, "Recebi um arquivo".');
+  } finally { lendoArquivo = false; }
+}
+
+// ---------- cópia automática dos pedais ----------
+// Ao abrir uma versão nova do app pela primeira vez, guarda uma cópia de todos
+// os pedais antes de qualquer outra coisa (loja `estado`, chave `copia`, e no
+// Android também um arquivo na pasta do app). Restaurar só acrescenta o que falta.
+function infoCopia() { try { return JSON.parse(localStorage.getItem('hodometro.copiaInfo') || 'null'); } catch { return null; } }
+
+async function copiaAutomatica() {
+  const seusPedais = S.pedais.filter(p => !p.demo);
+  const info = infoCopia();
+  if (!seusPedais.length || (info && info.versao === VERSAO)) return;
+  const copia = { app: 'hodometro', tipo: 'copia', versao: 3, feitaEm: Date.now(), daVersao: VERSAO, ajustes: S.cfg, perfil: S.perfil, pedais: S.pedais, rotas: S.rotas, amigos: S.amigos };
+  try {
+    await A.salvarEstado('copia', copia);
+    localStorage.setItem('hodometro.copiaInfo', JSON.stringify({ versao: VERSAO, feitaEm: copia.feitaEm, n: seusPedais.length }));
+  } catch { return; }
+  if (NATIVO) {
+    try { await chamar('Filesystem', 'writeFile', { path: `copias/hodometro-copia-${VERSAO}.json`, data: JSON.stringify(copia), directory: 'DATA', encoding: 'utf8', recursive: true }); }
+    catch { /* a cópia no banco já ficou */ }
+  }
+}
+
+async function restaurarCopia() {
+  let copia = null;
+  try { copia = await A.lerEstado('copia'); } catch { copia = null; }
+  if (!copia || !Array.isArray(copia.pedais)) { aviso('Não achei a cópia automática neste celular.'); return; }
+  const faltam = copia.pedais.filter(p => p && typeof p.id === 'string' && !S.pedais.some(x => x.id === p.id));
+  if (!faltam.length) { aviso('Todos os pedais da cópia já estão no app.'); return; }
+  const ok = await confirmar('Restaurar a cópia?', `${plural(faltam.length, 'pedal volta', 'pedais voltam')} para o app. Nada do que está aqui é apagado.`, 'Restaurar', false);
+  if (!ok) return;
+  try { await importarBackup({ ...copia, pedais: faltam }, 'restaurado'); }
+  catch { aviso('Não consegui restaurar. Tente de novo.'); }
 }
 
 async function excluirPedal(p) {
@@ -1467,6 +1914,27 @@ function ligarEventos() {
   $$('#chipsPeriodo button').forEach(b => b.addEventListener('click', () => { S.periodo = b.dataset.periodo; renderProgresso(); }));
   $('#btnComparar').addEventListener('click', () => { S.comparar = !S.comparar; renderProgresso(); });
   $('#btnMetas').addEventListener('click', abrirMetas);
+  $$('[data-tela-ir]').forEach(b => b.addEventListener('click', () => mostrarTela(b.dataset.telaIr)));
+  $('#btnStoryRend').addEventListener('click', abrirStoryRendimento);
+  $('#btnRendAmigo').addEventListener('click', enviarRendimento);
+
+  // Amigos
+  $('#btnNome').addEventListener('click', () => escolherNome(true));
+  $('#btnEnviarAmigo').addEventListener('click', enviarRendimento);
+  $('#btnPedirAmigo').addEventListener('click', pedirRendimento);
+  $$('#chipsRanking button').forEach(b => b.addEventListener('click', () => { S.rk = b.dataset.rk; renderAmigos(); }));
+  $('#arqAmigo').addEventListener('change', async e => {
+    const arq = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!arq) return;
+    try { await abrirArquivo(await arq.text(), arq.name); }
+    catch { aviso('Não consegui abrir esse arquivo.'); }
+  });
+  $('#btnVoltarAmigo').addEventListener('click', () => history.back());
+  $('#btnApelido').addEventListener('click', renomearAmigo);
+  $('#btnRemoverAmigo').addEventListener('click', removerAmigo);
+  $('#btnVerAmigo').addEventListener('click', () => { const p = S.detalhe; if (p && p.amigo) abrirAmigo(S.amigos.find(a => a.id === p.amigo.id)); });
+  $('#btnRestaurarCopia').addEventListener('click', restaurarCopia);
   $('#formMetas').addEventListener('submit', salvarMetas);
 
   $('#btnInstalar').addEventListener('click', async () => {
@@ -1522,7 +1990,7 @@ function ligarEventos() {
   $('#btnDemo').addEventListener('click', () => { history.back(); setTimeout(() => comecar(true), 50); });
 
   $('#btnBackup').addEventListener('click', async () => {
-    const dados = { app: 'hodometro', versao: 2, exportadoEm: new Date().toISOString(), ajustes: S.cfg, pedais: S.pedais, rotas: S.rotas };
+    const dados = { app: 'hodometro', versao: 3, exportadoEm: new Date().toISOString(), ajustes: S.cfg, perfil: S.perfil, pedais: S.pedais, rotas: S.rotas, amigos: S.amigos };
     const r = await entregarArquivo(JSON.stringify(dados), `hodometro-backup-${F.chaveDia(Date.now())}.json`, 'application/json');
     if (r === 'baixado') aviso('Backup salvo em Downloads.');
   });
@@ -1531,17 +1999,7 @@ function ligarEventos() {
     e.target.value = '';
     if (!arq) return;
     try {
-      const dados = JSON.parse(await arq.text());
-      const lista = Array.isArray(dados) ? dados : dados.pedais;
-      if (!Array.isArray(lista)) throw new Error('formato');
-      const validos = lista.filter(p => p && typeof p.id === 'string' && Number.isFinite(p.inicio) && Number.isFinite(p.distancia));
-      for (const p of validos) await A.salvarPedal(p);
-      S.pedais = await A.listarPedais();
-      const rotas = Array.isArray(dados.rotas) ? dados.rotas.filter(r => r && r.id && !S.rotas.some(x => x.id === r.id)) : [];
-      atualizarRotas([...S.rotas, ...rotas]);
-      salvarRotas();
-      render();
-      aviso(`${plural(validos.length, 'pedal importado', 'pedais importados')}.`);
+      await importarBackup(JSON.parse(await arq.text()));
     } catch {
       aviso('Não consegui ler esse arquivo. Escolha um backup exportado pelo app.');
     }
@@ -1550,35 +2008,17 @@ function ligarEventos() {
     const files = Array.from(e.target.files || []);
     e.target.value = '';
     if (!files.length) return;
-    let importados = 0, repetidos = 0;
-    for (const arq of files) {
-      try {
-        const texto = await arq.text();
-        const pedal = converterGPXEmPedal(texto);
-        if (pedalRepetido(pedal, S.pedais)) { repetidos++; continue; }
-        await A.salvarPedal(pedal);
-        S.pedais.push(pedal);
-        importados++;
-      } catch (err) {
-        console.warn('Erro ao importar GPX:', arq.name, err);
-      }
-    }
-    const jaTinha = repetidos ? ` ${plural(repetidos, 'pedal já estava', 'pedais já estavam')} no app.` : '';
-    if (importados > 0) {
-      atualizarRotas();
-      aviso(`${plural(importados, 'pedal importado', 'pedais importados')}.${jaTinha}`);
-      render();
-    } else if (repetidos) {
-      aviso(`Nada novo para importar.${jaTinha}`);
-    } else {
-      aviso('Não consegui ler esse arquivo. Escolha um GPX com o trajeto do pedal.');
-    }
+    const lidos = [];
+    for (const arq of files) { try { lidos.push({ nome: arq.name, texto: await arq.text() }); } catch { /* arquivo ilegível */ } }
+    await importarGPX(lidos);
   });
   $('#btnApagarTudo').addEventListener('click', async () => {
     if (!S.pedais.length) { aviso('Não há pedais para apagar.'); return; }
     const ok = await confirmar('Apagar todos os pedais?', `${plural(S.pedais.length, 'pedal sai', 'pedais saem')} deste celular, junto com as rotas. Exporte um backup antes se quiser guardar.`, 'Apagar tudo');
     if (!ok) return;
     await A.apagarTodos();
+    // Depois de apagar de propósito, o app não oferece a cópia automática sozinho
+    try { const info = infoCopia(); if (info) localStorage.setItem('hodometro.copiaInfo', JSON.stringify({ ...info, apagouEm: Date.now() })); } catch { /* ok */ }
     S.pedais = [];
     S.rotas = [];
     S.tentativas = {};
@@ -1653,6 +2093,7 @@ function ligarEventos() {
       aquecerGPS();
       conferirPermissoes();
       render();
+      verArquivoRecebido();
     } else {
       if (S.r) salvarAtivo();
       else desligarGPS();
@@ -1692,7 +2133,10 @@ async function iniciar() {
   $$('[data-nome-app]').forEach(el => { el.textContent = NOME_APP; });
   ligarEventos();
   try { S.pedais = await A.listarPedais(); } catch { S.pedais = []; }
+  await carregarAmigos();
   await carregarRotas();
+  // Antes de qualquer outra coisa, a cópia dos pedais desta versão
+  await copiaAutomatica();
   let recuperou = false, guiaSalva = null;
   try {
     const ativo = await A.lerEstado('ativo');
@@ -1722,6 +2166,14 @@ async function iniciar() {
   } else mostrarTela('inicio');
   registrarSW();
   if (!S.r) setTimeout(oferecerLancamento, 600);
+  const info = infoCopia();
+  if (!S.pedais.length && info && info.n && !(info.apagouEm > info.feitaEm)) {
+    aviso(`Seus pedais não apareceram. Há uma cópia automática com ${plural(info.n, 'pedal', 'pedais')}.`, 'Restaurar', restaurarCopia, 15000);
+  }
+  if (NATIVO) {
+    chamar('Gravador', 'addListener', 'arquivo', () => verArquivoRecebido()).catch(() => {});
+    verArquivoRecebido();
+  }
 }
 
 iniciar();

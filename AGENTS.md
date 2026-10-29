@@ -46,6 +46,21 @@ ficam no IndexedDB do celular. O nome é provisório: veja `docs/apresentacao.md
     o nome do banco `hodometro` nem as chaves `hodometro.*` do localStorage.
 13. **Rotas salvas** ficam no IndexedDB, loja `estado`, chave `rotas`. Rota
     excluída fica com `oculta: true`, para os mesmos pedais não criarem a rota de novo.
+14. **Amigos** ficam na loja `estado`, chave `amigos` (`js/amigos.js`, sem DOM e
+    testado). Pedal de amigo **nunca** entra na loja `pedais`: não conta no
+    progresso, nas metas, nos recordes nem nas rotas. Na tela ele ganha
+    `p.amigo = {id, nome}` só na memória (`comoAmigo` em `js/app.js`), e a tela
+    do pedal esconde renomear, excluir, GPX e salvar rota. O seu perfil (id e
+    nome no ranking) fica em `hodometro.perfil`; o id não muda, é por ele que o
+    amigo reconhece os próximos envios. O arquivo do amigo tem `app`, `tipo:
+    'amigo'` e `versao` (hoje 1): campo novo é opcional; se mudar o formato,
+    suba `versao` e mantenha a leitura da anterior em `lerPacote`.
+15. **Cópia automática.** Na primeira abertura de cada versão, `copiaAutomatica`
+    guarda todos os pedais na loja `estado`, chave `copia` (e no Android num
+    arquivo em `copias/`, na pasta do app). Restaurar só acrescenta o que falta.
+    Não tire isso: é a rede de segurança de cada atualização.
+16. **Rendimento** (`js/rendimento.js`, sem DOM e testado) usa sempre a janela do
+    primeiro pedal até hoje. Velocidade só com pedais de GPS de 1 km ou mais.
 
 ## App Android (Capacitor 7)
 
@@ -88,9 +103,13 @@ npm run android:abrir  abre no Android Studio
 - Estados: `aguardando` (sem GPS bom), `movendo`, `parado` (pausa automática ou
   espera antes de sair), `pausado` (pausa manual).
 - `js/app.js` liga o GPS (`js/fontes.js`) ao motor e às telas. Abas: Início,
-  Rotas, Gravar e Você (Progresso e Atividades). Ajustes pela engrenagem. Por cima
-  das abas abrem a atividade, a rota e os stories (`abrirSobreposta`); o Voltar do
-  Android fecha uma de cada vez pelo histórico (`popstate`).
+  Rotas, Gravar, Amigos e Você (Rendimento, Progresso e Atividades). Ajustes pela
+  engrenagem. Por cima das abas abrem a atividade, a rota, o amigo e os stories
+  (`abrirSobreposta`); o Voltar do Android fecha uma de cada vez pelo histórico
+  (`popstate`).
+- Arquivo aberto com o app (WhatsApp, Drive): o `MainActivity` aceita `VIEW` e
+  `SEND` de JSON e GPX; `GravadorPlugin.arquivoRecebido()` entrega o texto uma vez
+  e `abrirArquivo` em `js/app.js` decide se é amigo, backup ou GPX.
 - `organizarRotas(salvas, pedais)` junta as rotas salvas com o histórico e cria as
   automáticas. `GuiaRota` acompanha o pedal em andamento numa rota.
 - Avisos: `js/voz.js` (voz do sistema) e `js/vibra.js` (padrões de vibração).

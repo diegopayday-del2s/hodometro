@@ -102,6 +102,7 @@ small { font-weight: 600; color: var(--muted); }
 .btn2.vermelho { background: var(--vermelho); color: #fff; border-color: var(--vermelho); }
 .link { appearance: none; border: 0; background: none; color: var(--laranja-texto); font-weight: 700; padding: 10px 4px; min-height: 44px; display: inline-flex; align-items: center; }
 .linha-btn { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.linha-btn.coluna { grid-template-columns: minmax(0, 1fr); }
 
 /* Blocos e cartões */
 .bloco { display: grid; gap: 10px; }
@@ -215,6 +216,7 @@ small { font-weight: 600; color: var(--muted); }
   min-height: calc(100dvh - var(--nav-h) - env(safe-area-inset-bottom, 0px) - 30px);
 }
 #pronto .iniciar-area {
+  display: grid; justify-items: center; gap: 4px;
   position: relative;
   bottom: auto;
   margin-top: auto;
@@ -303,9 +305,10 @@ body.est-parado .mini-painel-ao-vivo #mvVel, body.est-pausado .mini-painel-ao-vi
 .btn-fim.segurando .enche { transform: scaleX(1); transition: transform 1.5s linear; }
 
 /* Você: abas do topo, chips, progresso */
-.abas-topo { display: grid; grid-template-columns: 1fr 1fr; margin: 0 -16px; border-bottom: 1px solid var(--line); }
+.abas-topo { display: grid; grid-template-columns: repeat(2, 1fr); margin: 0 -16px; border-bottom: 1px solid var(--line); }
 .abas-topo button { appearance: none; border: 0; background: none; padding: 12px 0; font-weight: 600; font-size: 16px; color: var(--muted); border-bottom: 3px solid transparent; }
 .abas-topo button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--laranja); }
+.abas-topo.tres-abas { grid-template-columns: repeat(3, 1fr); }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chips.centro { justify-content: center; }
 .chip-o { appearance: none; border: 1.5px solid var(--line); background: var(--surface); border-radius: 10px; padding: 7px 14px; font-weight: 600; font-size: 15px; color: var(--ink-2); min-height: 40px; }
@@ -347,6 +350,10 @@ body.est-parado .mini-painel-ao-vivo #mvVel, body.est-pausado .mini-painel-ao-vi
 .g-guia { stroke: var(--ink); stroke-width: 1; }
 .g-barra { fill: #d8d8de; }
 .g-barra.agora { fill: var(--laranja); }
+.g-barra-km { fill: var(--laranja); opacity: .4; }
+.g-barra-km.agora { opacity: 1; }
+.g-linha.fina { stroke-width: 1.4; opacity: .45; }
+.g-tendencia { stroke: var(--ink-2); stroke-width: 2; stroke-dasharray: 6 5; stroke-linecap: round; }
 .resumo-prog { background: var(--bg-2); border-radius: 16px; padding: 14px 16px; display: grid; gap: 6px; }
 .rot-ic { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; color: var(--ink-2); }
 .rot-ic .ic { width: 20px; height: 20px; }
@@ -461,7 +468,7 @@ details.painel[open] > summary::after { content: "\2212"; }
 /* Barra de abas */
 .abas {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--bg); border-top: 1px solid var(--line);
-  display: grid; grid-template-columns: repeat(4, 1fr);
+  display: grid; grid-template-columns: repeat(5, 1fr);
   padding-left: max(4px, env(safe-area-inset-left, 0px)); padding-right: max(4px, env(safe-area-inset-right, 0px)); padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 body.gravando .abas, body.ajustes .abas { display: none; }
@@ -496,3 +503,58 @@ body.gravando .toast, body.sobre .toast, body.ajustes .toast { bottom: env(safe-
 @media (prefers-reduced-motion: reduce) {
   .status .ponto, .sinal .sinal-barras i { animation: none !important; }
 }
+
+/* Rendimento desde o começo */
+.rend-topo { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; display: grid; gap: 6px; }
+.rend-grande { display: flex; align-items: baseline; gap: 8px; }
+.rend-grande b { font-family: var(--f-num); font-weight: 800; font-size: 58px; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums lining-nums; }
+.rend-grande small { font-size: 22px; color: var(--ink-2); }
+.rend-sub { margin: 0 0 6px; color: var(--muted); font-size: 15px; }
+.destaques { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.destaques li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; background: var(--bg-2); border-radius: 14px; padding: 11px 14px; font-size: 16px; }
+.destaques li::before { content: "•"; font-weight: 800; color: var(--ink-2); line-height: 1.45; }
+.destaques li.sobe::before { content: "▲"; color: var(--verde); font-size: 13px; line-height: 1.9; }
+.destaques li.desce::before { content: "▼"; color: var(--vermelho); font-size: 13px; line-height: 1.9; }
+.compara { display: grid; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+.compara-linha { display: grid; grid-template-columns: minmax(0, 1.3fr) repeat(2, minmax(0, 1fr)) minmax(0, .8fr); gap: 8px; align-items: baseline; padding: 11px 14px; background: var(--surface); }
+.compara-linha + .compara-linha { border-top: 1px solid var(--line); }
+.compara-linha.cab { padding-top: 9px; padding-bottom: 7px; background: var(--surface-2); }
+.compara-linha.cab span { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.compara-linha > span:first-child { font-size: 14px; color: var(--ink-2); font-weight: 600; }
+.compara-linha b { font-family: var(--f-num); font-weight: 700; font-size: 18px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.compara-linha b small { font-size: 13px; margin-left: 2px; }
+.compara-linha .var { text-align: right; font-size: 14px; white-space: nowrap; }
+.marco-anel { position: relative; }
+
+/* Amigos */
+.avatar { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 17px; color: #fff; background: var(--azul); flex: none; text-transform: uppercase; }
+.avatar.voce { background: var(--laranja); }
+.avatar.av-1 { background: var(--verde); }
+.avatar.av-2 { background: var(--ambar); }
+.avatar.av-3 { background: var(--ink-2); }
+.avatar.pequeno { width: 26px; height: 26px; font-size: 12px; }
+.avatar.grande { width: 64px; height: 64px; font-size: 28px; }
+.perfil-linha { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.perfil-linha b { display: block; font-size: 18px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.perfil-linha small { display: block; font-weight: 400; font-size: 14px; }
+.convite .link.centro { justify-self: center; cursor: pointer; }
+.ranking { display: grid; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+.rk { appearance: none; border: 0; width: 100%; background: var(--surface); color: var(--ink); text-align: left; display: grid; grid-template-columns: 30px auto minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 14px; }
+.rk + .rk { border-top: 1px solid var(--line); }
+.rk.voce { background: var(--laranja-suave); }
+.rk .pos { font-weight: 800; font-size: 16px; text-align: center; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.rk b { display: block; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rk small { display: block; font-weight: 400; font-size: 13px; }
+.rk .km { font-family: var(--f-num); font-weight: 700; font-size: 19px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rk .km small { display: inline; font-size: 13px; margin-left: 3px; font-weight: 600; }
+.card-autor { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; color: var(--ink-2); }
+.autor { display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--ink-2); }
+.amigo-topo { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px; align-items: center; }
+.juntos { display: grid; gap: 12px; }
+.juntos .hint { font-size: 14px; }
+.amigo-linha { appearance: none; border: 0; width: 100%; background: var(--surface); color: var(--ink); text-align: left; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 14px; }
+.amigo-linha + .amigo-linha { border-top: 1px solid var(--line); }
+.amigo-linha b { display: block; font-weight: 700; }
+.amigo-linha small { display: block; font-weight: 400; font-size: 13px; }
+.amigo-linha .seta { font-size: 26px; color: var(--muted); line-height: 1; }
+.tentativa b.ganho { color: var(--verde); }

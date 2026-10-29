@@ -32,13 +32,14 @@ export function aviso(msg, acaoTxt, acao, ms) {
   toastT = setTimeout(() => { t.hidden = true; }, ms || (acaoTxt ? 8000 : 4000));
 }
 
-/** Diálogo de confirmação. Devolve true se a pessoa confirmou. */
-export function confirmar(titulo, texto, sim = 'Excluir') {
+/** Diálogo de confirmação. Devolve true se a pessoa confirmou. `perigo`: botão vermelho (excluir, apagar). */
+export function confirmar(titulo, texto, sim = 'Excluir', perigo = true) {
   const d = $('#dlgConfirma');
   if (typeof d.showModal !== 'function') return Promise.resolve(window.confirm(`${titulo}\n\n${texto}`));
   $('#cfTitulo').textContent = titulo;
   $('#cfTexto').textContent = texto;
   $('#cfSim').textContent = sim;
+  $('#cfSim').className = perigo ? 'btn2 vermelho' : 'btn-pilula';
   d.returnValue = '';
   return new Promise(ok => {
     d.addEventListener('close', () => ok(d.returnValue === 'sim'), { once: true });
